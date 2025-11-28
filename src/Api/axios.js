@@ -1,7 +1,7 @@
 // src/services/axiosConfig.js
 import axios from 'axios';
 
-export const API_BASE_URL = 'http://localhost:3005/api';
+export const API_BASE_URL = 'https://housekeeping-backend.sagartmt.com/api';
 
 // Create axios instance with default config
 const api = axios.create({
