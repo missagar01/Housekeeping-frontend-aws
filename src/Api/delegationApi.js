@@ -1,12 +1,11 @@
-import axios from "../Api/axios";
+import axios from "./axios";
 
-const ENABLE_LOGS = true; // Set false in production
+const ENABLE_LOGS = true;
 
 const log = (...msg) => ENABLE_LOGS && console.log(...msg);
 
 export const getAllTasks = async () => {
     try {
-        // log("📥 Fetching all tasks...");
         const res = await axios.get('/assigntask/generate');
         return res.data;
     } catch (err) {
@@ -29,7 +28,6 @@ export const getPendingTasks = async () => {
             return start === today && !submitted;
         });
 
-        // log("📋 Pending today:", pending.length);
         return pending;
     } catch (err) {
         console.error("Error fetching pending tasks:", err);
@@ -53,12 +51,35 @@ export const getHistoryTasks = async () => {
     }
 };
 
+// NEW API FUNCTION FOR USER CONFIRMATION
+export const confirmTask = async (taskId) => {
+    try {
+        const form = new FormData();
+        form.append("attachment", "confirmed");
+        // Do NOT include submission_date for user confirmation
+
+        const res = await axios.post(
+            `/assigntask/generate/${taskId}/confirm`,
+            form,
+            {
+                headers: { "Content-Type": "multipart/form-data" },
+            }
+        );
+
+        return res.data;
+    } catch (err) {
+        console.error(`Failed confirming task ${taskId}:`, err);
+        throw err;
+    }
+};
+
 export const updateTask = async (taskId, updateData = {}) => {
     try {
         const form = new FormData();
 
         appendIfValid(form, "status", updateData.status);
         appendIfValid(form, "remark", updateData.remark);
+        appendIfValid(form, "attachment", updateData.attachment);
 
         if (updateData.status === "Yes" || updateData.status === "Done") {
             form.append("submission_date", new Date().toISOString());
@@ -77,7 +98,7 @@ export const updateTask = async (taskId, updateData = {}) => {
             form,
             {
                 headers: { "Content-Type": "multipart/form-data" },
-                timeout: 30000,
+
             }
         );
 
@@ -88,7 +109,6 @@ export const updateTask = async (taskId, updateData = {}) => {
     }
 };
 
-
 export const submitTasks = async (tasks = []) => {
     log(`📤 Submitting ${tasks.length} tasks...`);
 
@@ -96,6 +116,7 @@ export const submitTasks = async (tasks = []) => {
         const payload = {
             status: t.status || "Yes",
             remark: t.remark || "",
+            attachment: t.attachment || "No",
         };
 
         if (t.status === "Yes") {
@@ -112,8 +133,6 @@ export const submitTasks = async (tasks = []) => {
 
     const successful = results.filter((r) => r.status === "fulfilled").map((s) => s.value);
     const failed = results.filter((r) => r.status === "rejected").map((f) => f.reason);
-
-    // log(` ${successful.length} success |  ${failed.length} failed`);
 
     return { successful, failed };
 };

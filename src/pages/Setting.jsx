@@ -17,9 +17,7 @@ const Setting = () => {
 
   // Data states
   const [userData, setUserData] = useState([]);
-  // const [departmentData, setDepartmentData] = useState([]);
 
-  // Form states
   const [userForm, setUserForm] = useState({
     user_name: '',
     email_id: '',

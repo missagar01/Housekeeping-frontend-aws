@@ -76,7 +76,7 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
       label: "Dashboard",
       icon: Database,
       active: location.pathname === "/dashboard/admin",
-      showFor: ["admin", "user"],
+      showFor: ["admin"],
     },
     // {
     //   href: "/dashboard/quick-task",
@@ -521,18 +521,20 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
           {children}
 
           <div className="fixed md:left-64 left-0 right-0 bottom-0 py-1 px-4 gradient-bg text-white text-center text-sm shadow-lg z-10 backdrop-blur-sm">  <div className="sm:hidden flex justify-between items-center mb-[-10px]">
-            <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
-              <Link
-                to={"/dashboard/admin"}
-                className={` ${location.pathname === `/dashboard/admin`
-                  ? "bg-white/20"
-                  : ""
-                  }`}
-              // onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Home size={29} className="drop-shadow-md" />
-              </Link>
-            </div>
+            {userRole === "admin" || userRole === "superadmin" && (
+              <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
+                <Link
+                  to={"/dashboard/admin"}
+                  className={` ${location.pathname === `/dashboard/admin`
+                    ? "bg-white/20"
+                    : ""
+                    }`}
+                // onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Home size={29} className="drop-shadow-md" />
+                </Link>
+              </div>
+            )}
             <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
               <Link
                 to={"/dashboard/assign-task"}

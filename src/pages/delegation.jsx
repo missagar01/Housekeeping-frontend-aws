@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { CheckCircle2, Upload, X, Search, History, ArrowLeft } from "lucide-react"
 import AdminLayout from "../components/layout/AdminLayout"
-import { getPendingTasks, getHistoryTasks, submitTasks } from "../Api/SubmitTasksApi"
+import { getPendingTasks, getHistoryTasks, submitTasks, confirmTask } from "../Api/delegationApi"
 
 // Configuration object
 const CONFIG = {
@@ -29,20 +29,14 @@ function AccountDataPage() {
   const [selectedMembers, setSelectedMembers] = useState([])
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  // const [userRole, setUserRole] = useState("")
-  // const [username, setUsername] = useState("")
   const [loading, setLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [selectedDepartment, setSelectedDepartment] = useState("")
+  const [userRole, setUserRole] = useState("")
+  const [userDepartment, setUserDepartment] = useState("")
+  const [confirmingTask, setConfirmingTask] = useState(null)
 
   const tableContainerRef = useRef(null)
-
-  // Get user info
-  // useEffect(() => {
-  //   const role = localStorage.getItem("role")
-  //   const user = localStorage.getItem("username")
-  //   setUserRole(role || "")
-  //   setUsername(user || "")
-  // }, [])
 
   // Mobile detection
   useEffect(() => {
@@ -50,6 +44,14 @@ function AccountDataPage() {
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Get user role and department
+  useEffect(() => {
+    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || ""
+    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || ""
+    setUserRole(role)
+    setUserDepartment(department)
   }, [])
 
   // Load data
@@ -104,13 +106,36 @@ function AccountDataPage() {
   const resetFilters = useCallback(() => {
     setSearchTerm("")
     setSelectedMembers([])
+    setSelectedDepartment("")
     setStartDate("")
     setEndDate("")
   }, [])
 
-  // Filter pending tasks
+  // NEW FUNCTION FOR USER CONFIRMATION
+  const handleConfirmTask = async (taskId) => {
+    setConfirmingTask(taskId)
+    try {
+      await confirmTask(taskId)
+      setSuccessMessage("Task confirmed successfully!")
+      // Reload data to reflect changes
+      await loadData()
+    } catch (error) {
+      console.error('Confirmation error:', error)
+      alert('Confirmation failed: ' + error.message)
+    } finally {
+      setConfirmingTask(null)
+    }
+  }
+
   const filteredPendingTasks = useMemo(() => {
     return pendingTasks.filter(task => {
+      // If user role is 'user', only show tasks from their department
+      if (userRole && userRole.toLowerCase() === 'user' && userDepartment) {
+        if (task.department !== userDepartment) {
+          return false
+        }
+      }
+
       const matchesSearch = searchTerm
         ? Object.values(task).some(value =>
           value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
@@ -121,7 +146,11 @@ function AccountDataPage() {
         ? selectedMembers.includes(task.name)
         : true
 
-      return matchesSearch && matchesMember
+      const matchesDepartment = selectedDepartment
+        ? task.department === selectedDepartment
+        : true
+
+      return matchesSearch && matchesMember && matchesDepartment
     }).sort((a, b) => {
       const dateA = new Date(a.task_start_date || "")
       const dateB = new Date(b.task_start_date || "")
@@ -129,12 +158,18 @@ function AccountDataPage() {
       if (!dateB || isNaN(dateB.getTime())) return -1
       return dateA.getTime() - dateB.getTime()
     })
-  }, [pendingTasks, searchTerm, selectedMembers])
+  }, [pendingTasks, searchTerm, selectedMembers, selectedDepartment, userRole, userDepartment])
 
-  // Filter history tasks
   const filteredHistoryData = useMemo(() => {
     return historyTasks
       .filter(item => {
+        // If user role is 'user', only show tasks from their department
+        if (userRole && userRole.toLowerCase() === 'user' && userDepartment) {
+          if (item.department !== userDepartment) {
+            return false
+          }
+        }
+
         const matchesSearch = searchTerm
           ? Object.entries(item).some(([key, value]) => {
             if (['image', 'admin_done'].includes(key)) return false
@@ -144,6 +179,10 @@ function AccountDataPage() {
 
         const matchesMember = selectedMembers.length > 0
           ? selectedMembers.includes(item.name)
+          : true
+
+        const matchesDepartment = selectedDepartment
+          ? item.department === selectedDepartment
           : true
 
         let matchesDateRange = true
@@ -164,31 +203,23 @@ function AccountDataPage() {
           }
         }
 
-        return matchesSearch && matchesMember && matchesDateRange
+        return matchesSearch && matchesMember && matchesDepartment && matchesDateRange
       })
       .sort((a, b) => {
         const dateA = a.submission_date ? new Date(a.submission_date) : new Date(0)
         const dateB = b.submission_date ? new Date(b.submission_date) : new Date(0)
         return dateB.getTime() - dateA.getTime()
       })
-  }, [historyTasks, searchTerm, selectedMembers, startDate, endDate])
+  }, [historyTasks, searchTerm, selectedMembers, selectedDepartment, startDate, endDate, userRole, userDepartment])
 
-  // Get unique members for filter
-  // const getFilteredMembersList = useMemo(() => {
-  //   const allMembers = [...new Set([...pendingTasks, ...historyTasks]
-  //     .map(task => task.name)
-  //     .filter(Boolean))]
+  const getDepartmentsList = useMemo(() => {
+    const allDepartments = [...new Set([...pendingTasks, ...historyTasks]
+      .map(task => task.department)
+      .filter(Boolean))]
+    return allDepartments
+  }, [pendingTasks, historyTasks])
 
-  //   if (userRole === "admin") {
-  //     return allMembers
-  //   } else {
-  //     return allMembers.filter(member =>
-  //       member.toLowerCase() === username.toLowerCase()
-  //     )
-  //   }
-  // }, [pendingTasks, historyTasks])
-
-  // Selection handlers
+  // Selection handlers (for admin only)
   const handleSelectItem = useCallback((taskId, isChecked) => {
     setSelectedItems(prev => {
       const newSelected = new Set(prev)
@@ -254,7 +285,7 @@ function AccountDataPage() {
     resetFilters()
   }, [resetFilters])
 
-  // In your React component - update handleSubmit function
+  // Admin submit function
   const handleSubmit = async () => {
     const selectedItemsArray = Array.from(selectedItems);
     if (selectedItemsArray.length === 0) {
@@ -273,7 +304,6 @@ function AccountDataPage() {
       return;
     }
 
-    // Validation checks...
     setIsSubmitting(true);
 
     try {
@@ -285,16 +315,11 @@ function AccountDataPage() {
           task_id: task.task_id,
           status: additionalData[id] || "Yes",
           remark: remarksData[id] || "",
-          image_file: imageData ? imageData.file : null, // File object
-          image_url: task.image || null // Existing image URL
+          attachment: task.attachment || "No", // Use the existing attachment value (including "confirmed")
+          image_file: imageData ? imageData.file : null,
+          image_url: task.image || null
         };
       });
-
-      // console.log('🎯 Submitting data with images:', selectedData.map(item => ({
-      //   task_id: item.task_id,
-      //   has_image: !!item.image_file,
-      //   image_name: item.image_file?.name
-      // })));
 
       const result = await submitTasks(selectedData);
 
@@ -305,7 +330,6 @@ function AccountDataPage() {
         setSuccessMessage(`Successfully submitted ${selectedItemsArray.length} tasks with images!`);
       }
 
-      // Refresh data and reset form
       await loadData();
       setSelectedItems(new Set());
       setAdditionalData({});
@@ -320,8 +344,8 @@ function AccountDataPage() {
     }
   };
 
-
   const selectedItemsCount = selectedItems.size
+  const isUser = userRole && userRole.toLowerCase() === 'user'
 
   return (
     <AdminLayout>
@@ -363,7 +387,7 @@ function AccountDataPage() {
                 )}
               </button>
 
-              {!showHistory && (
+              {!showHistory && !isUser && (
                 <button
                   onClick={handleSubmit}
                   disabled={selectedItemsCount === 0 || isSubmitting}
@@ -389,17 +413,6 @@ function AccountDataPage() {
         )}
 
         <div className="rounded-lg border border-gray-200 shadow-md bg-white overflow-hidden">
-          {/* <div className="bg-gradient-to-r from-gray-50 to-pink-50 border-b border-gray-100 p-3 sm:p-4">
-            {/* <h2 className="text-gray-700 font-medium text-sm sm:text-base">
-              {showHistory ? `Completed Checklist Tasks` : `Pending Checklist Tasks`}
-            </h2> */}
-          {/* <p className="text-gray-600 text-xs sm:text-sm mt-1">
-              {showHistory
-                ? `${CONFIG.PAGE_CONFIG.historyDescription} for ${userRole === "admin" ? "all" : "your"} tasks`
-                : CONFIG.PAGE_CONFIG.description}
-            </p> 
-          </div> */}
-
           {loading ? (
             <div className="text-center py-10">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-500 mb-4"></div>
@@ -417,61 +430,28 @@ function AccountDataPage() {
               {/* History Filters */}
               <div className="p-3 sm:p-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex flex-col gap-3 sm:gap-4">
-                  {/* {getFilteredMembersList.length > 0 && (
+                  {getDepartmentsList.length > 0 && (
                     <div className="flex flex-col">
-                      <div className="mb-2 flex items-center">
-                        <span className="text-xs sm:text-sm font-medium text-gray-700">Filter by Member:</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 sm:gap-3 max-h-32 overflow-y-auto p-2 border border-gray-200 rounded-md bg-white">
-                        {getFilteredMembersList.map((member, idx) => (
-                          <div key={idx} className="flex items-center">
-                            <input
-                              id={`member-${idx}`}
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                              checked={selectedMembers.includes(member)}
-                              onChange={() => handleMemberSelection(member)}
-                            />
-                            <label htmlFor={`member-${idx}`} className="ml-2 text-xs sm:text-sm text-gray-700">
-                              {member}
-                            </label>
-                          </div>
+                      <label htmlFor="department-filter" className="text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Filter by Department:
+                      </label>
+                      <select
+                        id="department-filter"
+                        value={selectedDepartment}
+                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                        className="text-xs sm:text-sm border border-gray-200 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                      >
+                        <option value="">All Departments</option>
+                        {getDepartmentsList.map((department, idx) => (
+                          <option key={idx} value={department}>
+                            {department}
+                          </option>
                         ))}
-                      </div>
+                      </select>
                     </div>
-                  )} */}
+                  )}
 
-                  {/* <div className="flex flex-col">
-                    <div className="mb-2 flex items-center">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700">Filter by Date Range:</span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                      <div className="flex items-center w-full sm:w-auto">
-                        <label htmlFor="start-date" className="text-xs sm:text-sm text-gray-700 mr-1 whitespace-nowrap">
-                          From
-                        </label>
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="text-xs sm:text-sm border border-gray-200 rounded-md p-1 flex-1 sm:flex-none"
-                        />
-                      </div>
-                      <div className="flex items-center w-full sm:w-auto">
-                        <label htmlFor="end-date" className="text-xs sm:text-sm text-gray-700 mr-1 whitespace-nowrap">
-                          To
-                        </label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          className="text-xs sm:text-sm border border-gray-200 rounded-md p-1 flex-1 sm:flex-none"
-                        />
-                      </div>
-                    </div>
-                  </div> */}
-
-                  {(selectedMembers.length > 0 || startDate || endDate || searchTerm) && (
+                  {(selectedMembers.length > 0 || selectedDepartment || startDate || endDate || searchTerm) && (
                     <button
                       onClick={resetFilters}
                       className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-xs sm:text-sm w-full sm:w-auto"
@@ -493,12 +473,6 @@ function AccountDataPage() {
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Department
                       </th>
-                      {/* <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Given By
-                      </th>
-                      <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Name
-                      </th> */}
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                         Task Description
                       </th>
@@ -508,12 +482,9 @@ function AccountDataPage() {
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Freq
                       </th>
-                      {/* <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Reminders
-                      </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Attachment
-                      </th> */}
+                      </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-green-50 whitespace-nowrap">
                         Actual Date
                       </th>
@@ -540,12 +511,6 @@ function AccountDataPage() {
                           <td className="px-2 sm:px-3 py-2 sm:py-4">
                             <div className="text-xs sm:text-sm text-gray-900 break-words">{history.department || "—"}</div>
                           </td>
-                          {/* <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.given_by || "—"}</div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.name || "—"}</div>
-                          </td> */}
                           <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
                             <div className="text-xs sm:text-sm text-gray-900 break-words" title={history.task_description}>
                               {history.task_description || "—"}
@@ -559,12 +524,15 @@ function AccountDataPage() {
                           <td className="px-2 sm:px-3 py-2 sm:py-4">
                             <div className="text-xs sm:text-sm text-gray-900 break-words">{history.frequency || "—"}</div>
                           </td>
-                          {/* <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.enable_reminder || "—"}</div>
-                          </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.require_attachment || "—"}</div>
-                          </td> */}
+                            <div className="text-xs sm:text-sm text-gray-900 break-words">
+                              {history.attachment === "confirmed" ? (
+                                <span className="text-green-600 font-medium">Confirmed</span>
+                              ) : (
+                                history.attachment || "—"
+                              )}
+                            </div>
+                          </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
                             <div className="text-xs sm:text-sm text-gray-900 break-words">
                               {formatDateTimeForDisplay(history.submission_date)}
@@ -606,7 +574,6 @@ function AccountDataPage() {
                               <span className="text-gray-400 text-xs sm:text-sm">No file</span>
                             )}
                           </td>
-
                         </tr>
                       ))
                     ) : (
@@ -623,217 +590,315 @@ function AccountDataPage() {
               </div>
             </>
           ) : (
-            /* Pending Tasks Table */
-            <div ref={tableContainerRef} className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)' }}>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-16">
-                      Seq. No.
-                    </th>
+            <div>
+              {/* Pending Tasks - Different views for User vs Admin */}
+              {!showHistory && !isUser && getDepartmentsList.length > 0 && (
+                <div className="p-3 sm:p-4 border-b border-gray-100 bg-gray-50">
+                  <div className="flex flex-col-2 sm:flex-row items-start sm:items-end gap-3">
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor="pending-department-filter" className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">
+                        Filter by Department:
+                      </label>
+                      <select
+                        id="pending-department-filter"
+                        value={selectedDepartment}
+                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                        className="text-xs sm:text-sm border border-gray-200 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-gray-500 w-full sm:max-w-xs"
+                      >
+                        <option value="">All Departments</option>
+                        {getDepartmentsList.map((department, idx) => (
+                          <option key={idx} value={department}>
+                            {department}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                        checked={filteredPendingTasks.length > 0 && selectedItems.size === filteredPendingTasks.length}
-                        onChange={handleSelectAllItems}
-                      />
-                    </th>
+                    {(selectedMembers.length > 0 || selectedDepartment || searchTerm) && (
+                      <button
+                        onClick={resetFilters}
+                        className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-xs sm:text-sm whitespace-nowrap mt-6 sm:mt-0"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Task ID
-                    </th>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Department
-                    </th>
-                    {/* <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Given By
-                    </th> */}
-                    {/* <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Name
-                    </th> */}
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                      Task Description
-                    </th>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 whitespace-nowrap">
-                      Task Start Date
-                    </th>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Freq
-                    </th>
-                    {/* <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Reminders
-                    </th> 
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Attachment
-                    </th>*/}
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Status
-                    </th>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
-                      Remarks
-                    </th>
-                    <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Upload Image
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredPendingTasks.length > 0 ? (
-                    filteredPendingTasks.map((task, index) => {
-                      const isSelected = selectedItems.has(task.task_id)
-                      const sequenceNumber = index + 1
-
-                      return (
-                        <tr key={task.task_id} className={`${isSelected ? "bg-gray-50" : ""} hover:bg-gray-50`}>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 w-16">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900 text-center">
-                              {sequenceNumber}
-                            </div>
-                          </td>
-
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 w-12">
+              <div ref={tableContainerRef} className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)' }}>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      {/* USER VIEW - SIMPLIFIED COLUMNS */}
+                      {isUser ? (
+                        <>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Action
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Department
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                            Task Description
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 whitespace-nowrap">
+                            Task Start Date
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Freq
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Attachment
+                          </th>
+                        </>
+                      ) : (
+                        /* ADMIN VIEW - FULL COLUMNS */
+                        <>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-16">
+                            Seq. No.
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                              checked={isSelected}
-                              onChange={(e) => handleCheckboxClick(e, task.task_id)}
+                              checked={filteredPendingTasks.length > 0 && selectedItems.size === filteredPendingTasks.length}
+                              onChange={handleSelectAllItems}
                             />
-                          </td>
-
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.task_id || "—"}</div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.department || "—"}</div>
-                          </td>
-                          {/* <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.given_by || "—"}</div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.name || "—"}</div>
-                          </td> */}
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words" title={task.task_description}>
-                              {task.task_description || "—"}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {formatDateTimeForDisplay(task.task_start_date)}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.frequency || "—"}</div>
-                          </td>
-                          {/* <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.enable_reminder || "—"}</div>
-                          </td> 
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{task.require_attachment || "—"}</div>
-                          </td>*/}
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
-                            <select
-                              disabled={!isSelected}
-                              value={additionalData[task.task_id] || ""}
-                              onChange={(e) => {
-                                setAdditionalData(prev => ({ ...prev, [task.task_id]: e.target.value }))
-                                if (e.target.value !== "No") {
-                                  setRemarksData(prev => {
-                                    const newData = { ...prev }
-                                    delete newData[task.task_id]
-                                    return newData
-                                  })
-                                }
-                              }}
-                              className="border border-gray-300 rounded-md px-2 py-1 w-full disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm"
-                            >
-                              <option value="">Select...</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-orange-50 min-w-[120px]">
-                            <input
-                              type="text"
-                              placeholder={
-                                additionalData[task.task_id] === "No"
-                                  ? "Remarks required*"
-                                  : "Enter remarks"
-                              }
-                              disabled={!isSelected || !additionalData[task.task_id]}
-                              value={remarksData[task.task_id] || ""}
-                              onChange={(e) => setRemarksData(prev => ({ ...prev, [task.task_id]: e.target.value }))}
-                              className={`border rounded-md px-2 py-1 w-full border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm break-words ${additionalData[task.task_id] === "No" && (!remarksData[task.task_id] || remarksData[task.task_id].trim() === "")
-                                ? "border-red-500 bg-red-50"
-                                : ""
-                                }`}
-                            />
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
-                            {uploadedImages[task.task_id] || task.image ? (
-                              <div className="flex items-center">
-                                <img
-                                  src={uploadedImages[task.task_id]?.previewUrl || task.image}
-                                  alt="Receipt"
-                                  className="h-8 w-8 sm:h-10 sm:w-10 object-cover rounded-md mr-2 flex-shrink-0"
-                                />
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-xs text-gray-500 break-words">
-                                    {uploadedImages[task.task_id]?.file.name || "Uploaded"}
-                                  </span>
-                                  {uploadedImages[task.task_id] ? (
-                                    <span className="text-xs text-green-600">Ready</span>
-                                  ) : (
-                                    <button
-                                      className="text-xs text-gray-600 hover:text-gray-800 break-words"
-                                      onClick={() => window.open(task.image, "_blank")}
-                                    >
-                                      View
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <label
-                                className={`flex items-center cursor-pointer ${task.require_attachment?.toUpperCase() === "YES" &&
-                                  additionalData[task.task_id] !== "No"
-                                  ? "text-red-600 font-medium"
-                                  : "text-gray-600"
-                                  } hover:text-gray-800`}
-                              >
-                                <Upload className="h-4 w-4 mr-1 flex-shrink-0" />
-                                <span className="text-xs break-words">
-                                  {task.require_attachment?.toUpperCase() === "YES" &&
-                                    additionalData[task.task_id] !== "No"
-                                    ? "Required*"
-                                    : "Upload"}
-                                </span>
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  accept="image/*"
-                                  onChange={(e) => handleImageUpload(task.task_id, e)}
-                                  disabled={!isSelected}
-                                />
-                              </label>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={13} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
-                        {searchTerm || selectedMembers.length > 0
-                          ? "No tasks matching your search"
-                          : "No pending tasks found"}
-                      </td>
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Task ID
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Department
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                            Task Description
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 whitespace-nowrap">
+                            Task Start Date
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Freq
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Attachment
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Status
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                            Remarks
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Upload Image
+                          </th>
+                        </>
+                      )}
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredPendingTasks.length > 0 ? (
+                      filteredPendingTasks.map((task, index) => {
+                        const isSelected = selectedItems.has(task.task_id)
+                        const sequenceNumber = index + 1
+
+                        return (
+                          <tr key={task.task_id} className={`${isSelected ? "bg-gray-50" : ""} hover:bg-gray-50`}>
+                            {isUser ? (
+                              /* USER VIEW ROW */
+                              <>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <button
+                                    onClick={() => handleConfirmTask(task.task_id)}
+                                    disabled={confirmingTask === task.task_id || task.attachment === "confirmed"}
+                                    className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${task.attachment === "confirmed"
+                                      ? "bg-gray-100 text-gray-600 cursor-not-allowed"
+                                      : "bg-green-600 text-white hover:bg-green-700"
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                  >
+                                    {confirmingTask === task.task_id
+                                      ? "Confirming..."
+                                      : task.attachment === "confirmed"
+                                        ? "Confirmed"
+                                        : "Confirm"
+                                    }
+                                  </button>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">{task.department || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words" title={task.task_description}>
+                                    {task.task_description || "—"}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                    {formatDateTimeForDisplay(task.task_start_date)}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">{task.frequency || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                    {task.attachment === "confirmed" ? (
+                                      <span className="text-green-600 font-medium">Confirmed</span>
+                                    ) : (
+                                      task.attachment || "Pending"
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              /* ADMIN VIEW ROW */
+                              <>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 w-16">
+                                  <div className="text-xs sm:text-sm font-medium text-gray-900 text-center">
+                                    {sequenceNumber}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 w-12">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                                    checked={isSelected}
+                                    onChange={(e) => handleCheckboxClick(e, task.task_id)}
+                                  />
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">{task.task_id || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">{task.department || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words" title={task.task_description}>
+                                    {task.task_description || "—"}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                    {formatDateTimeForDisplay(task.task_start_date)}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">{task.frequency || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                    {task.attachment === "confirmed" ? (
+                                      <span className="text-green-600 font-medium">Confirmed</span>
+                                    ) : (
+                                      task.attachment || "—"
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
+                                  <select
+                                    disabled={!isSelected}
+                                    value={additionalData[task.task_id] || ""}
+                                    onChange={(e) => {
+                                      setAdditionalData(prev => ({ ...prev, [task.task_id]: e.target.value }))
+                                      if (e.target.value !== "No") {
+                                        setRemarksData(prev => {
+                                          const newData = { ...prev }
+                                          delete newData[task.task_id]
+                                          return newData
+                                        })
+                                      }
+                                    }}
+                                    className="border border-gray-300 rounded-md px-2 py-1 w-full disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm"
+                                  >
+                                    <option value="">Select...</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                  </select>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 bg-orange-50 min-w-[120px]">
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      additionalData[task.task_id] === "No"
+                                        ? "Remarks required*"
+                                        : "Enter remarks"
+                                    }
+                                    disabled={!isSelected || !additionalData[task.task_id]}
+                                    value={remarksData[task.task_id] || ""}
+                                    onChange={(e) => setRemarksData(prev => ({ ...prev, [task.task_id]: e.target.value }))}
+                                    className={`border rounded-md px-2 py-1 w-full border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm break-words ${additionalData[task.task_id] === "No" && (!remarksData[task.task_id] || remarksData[task.task_id].trim() === "")
+                                      ? "border-red-500 bg-red-50"
+                                      : ""
+                                      }`}
+                                  />
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
+                                  {uploadedImages[task.task_id] || task.image ? (
+                                    <div className="flex items-center">
+                                      <img
+                                        src={uploadedImages[task.task_id]?.previewUrl || task.image}
+                                        alt="Receipt"
+                                        className="h-8 w-8 sm:h-10 sm:w-10 object-cover rounded-md mr-2 flex-shrink-0"
+                                      />
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="text-xs text-gray-500 break-words">
+                                          {uploadedImages[task.task_id]?.file.name || "Uploaded"}
+                                        </span>
+                                        {uploadedImages[task.task_id] ? (
+                                          <span className="text-xs text-green-600">Ready</span>
+                                        ) : (
+                                          <button
+                                            className="text-xs text-gray-600 hover:text-gray-800 break-words"
+                                            onClick={() => window.open(task.image, "_blank")}
+                                          >
+                                            View
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <label
+                                      className={`flex items-center cursor-pointer ${task.attachment?.toUpperCase() === "YES" &&
+                                        additionalData[task.task_id] !== "No"
+                                        ? "text-red-600 font-medium"
+                                        : "text-gray-600"
+                                        } hover:text-gray-800`}
+                                    >
+                                      <Upload className="h-4 w-4 mr-1 flex-shrink-0" />
+                                      <span className="text-xs break-words">
+                                        {task.attachment?.toUpperCase() === "YES" &&
+                                          additionalData[task.task_id] !== "No"
+                                          ? "Required*"
+                                          : "Upload"}
+                                      </span>
+                                      <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={(e) => handleImageUpload(task.task_id, e)}
+                                        disabled={!isSelected}
+                                      />
+                                    </label>
+                                  )}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        )
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={isUser ? 6 : 13} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
+                          {searchTerm || selectedMembers.length > 0
+                            ? "No tasks matching your search"
+                            : "No pending tasks found"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

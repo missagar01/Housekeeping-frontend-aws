@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "../../components/layout/AdminLayout";
 import { pushAssignTask } from "../../Api/assignTaskApi";
 
 export default function AssignTask() {
   // Simple options
-  const departments = ["Mandir", "Car Parking Area", "Main Gate", "Main Gate Front Area", "Admin Office - Ground Floor", "Cabins ग्राउंड फ्लोर: and first floor", "Admin Office - First Floor", "Weight Office & Kata In/Out", "New Lab", "Canteen Area 1 & 2", "Pipe Mill", "Patra Mill Foreman Office", "Patra Mill DC Panel Room", "Patra Mill AC Panel Room", "SMS Panel Room", "SMS Office", "CCM Office", "CCM Panel Room", "Store Office", "Workshop", "Labour Colony & Bathroom", "Plant Area"];
+  const allDepartments = ["Mandir", "Car Parking Area", "Main Gate", "Main Gate Front Area", "Admin Office - Ground Floor", "Cabins ग्राउंड फ्लोर: and first floor", "Admin Office - First Floor", "Weight Office & Kata In/Out", "New Lab", "Canteen Area 1 & 2", "Pipe Mill", "Patra Mill Foreman Office", "Patra Mill DC Panel Room", "Patra Mill AC Panel Room", "SMS Panel Room", "SMS Office", "CCM Office", "CCM Panel Room", "Store Office", "Workshop", "Labour Colony & Bathroom", "Plant Area"];
   const givenBy = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
-  const doerNames = ["Housekeeping Staff"];
+  const doerNames = ["Housekeeping Staff", "Company Reja"];
   const frequencies = ["one-time", "daily", "weekly", "monthly"];
 
   // Form state
@@ -20,6 +20,21 @@ export default function AssignTask() {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userRole, setUserRole] = useState("")
+  const [userDepartment, setUserDepartment] = useState("")
+
+
+  useEffect(() => {
+    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || ""
+    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || ""
+    setUserRole(role)
+    setUserDepartment(department)
+  }, [])
+
+
+  const departments = userRole && userRole.toLowerCase() === 'user' && userDepartment
+    ? allDepartments.filter(dept => dept === userDepartment) // Show only user's department
+    : allDepartments;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -58,7 +73,7 @@ export default function AssignTask() {
       });
 
     } catch (error) {
-      console.error("💥 Error in handleSubmit:", error);
+      console.error("Error in handleSubmit:", error);
 
       // Since data is saving despite timeout, show a different message
       if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {

@@ -40,6 +40,15 @@ export const authAPI = {
             }
         }
     },
+    getUserProfile: async (userId) => {
+        try {
+            const response = await api.get(`/users/${userId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Get User Profile API Error:', error);
+            throw new Error('Failed to fetch user profile');
+        }
+    }
 };
 
 export default api;

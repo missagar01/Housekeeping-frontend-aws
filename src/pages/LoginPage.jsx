@@ -14,7 +14,7 @@ const LoginPage = () => {
   })
   const [toast, setToast] = useState({ show: false, message: "", type: "" })
 
-  // Don't auto-redirect on mount, let ProtectedRoute handle it
+  // Don't auto-redirect on mount, let ProtectedRoute handle ita
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -34,24 +34,38 @@ const LoginPage = () => {
       if (response.message === 'Login successful' && response.user) {
         const user = response.user;
 
+        // GET USER DEPARTMENT FROM PROFILE API
+        let userDepartment = "";
+        try {
+          const userProfile = await authAPI.getUserProfile(user.id);
+          userDepartment = userProfile.department || userProfile.user_department || "";
+          // console.log("User Profile:", userProfile);
+        } catch (profileError) {
+          console.warn("Could not fetch user profile:", profileError);
+        }
+
         // Store user data
         sessionStorage.setItem('user-name', user.user_name || "");
         sessionStorage.setItem('role', user.role || "");
         sessionStorage.setItem('email_id', user.email_id || "");
         sessionStorage.setItem('user_id', user.id || "");
+        sessionStorage.setItem('department', userDepartment);
 
         localStorage.setItem('user-name', user.user_name || "");
         localStorage.setItem('role', user.role || "");
         localStorage.setItem('email_id', user.email_id || "");
+        localStorage.setItem('user_id', user.id || "");
+        localStorage.setItem('department', userDepartment);
 
         showToast(`Welcome back, ${user.user_name}!`, "success");
 
         // Navigate immediately
-        navigate("/dashboard/admin");
-      } else {
-        throw new Error(response.message || "Login failed");
+        if (user.role === 'user') {
+          navigate("/dashboard/delegation");
+        } else {
+          navigate("/dashboard/admin");
+        }
       }
-
     } catch (error) {
       showToast(error.message, "error");
     } finally {
