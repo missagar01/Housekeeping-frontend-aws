@@ -447,7 +447,7 @@ export default function TaskNavigationTabs({
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium text-gray-700">
-              Total {taskView === 'recent' ? "Today's" : taskView} Tasks:
+              Total Tasks:
               <span className="ml-2 text-blue-600 font-bold">{totalCount}</span>
             </span>
             <div className="text-xs text-gray-500">

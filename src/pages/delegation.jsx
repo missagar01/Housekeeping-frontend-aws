@@ -649,7 +649,7 @@ function AccountDataPage() {
                             Freq
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                            Attachment
+                            COnfirm By HOD
                           </th>
                         </>
                       ) : (
@@ -682,7 +682,7 @@ function AccountDataPage() {
                             Freq
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                            Attachment
+                            Confirmed By HOD
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                             Status

@@ -2,13 +2,40 @@ import { useState, useEffect } from "react";
 import AdminLayout from "../../components/layout/AdminLayout";
 import { pushAssignTask } from "../../Api/assignTaskApi";
 
+// Add this HOD mapping object after imports
+const departmentHODs = {
+  "Mandir": "Komal Sahu and Rinku Gautam",
+  "Main Gate": "Komal Sahu and Rinku Gautam",
+  "Main Gate Front Area": "Komal Sahu and Rinku Gautam",
+  "Admin Office - Ground Floor": "Moradhwaj Verma and Shivraj Sharma",
+  "Admin Office - First Floor": "Moradhwaj Verma and Shivraj Sharma",
+  "Cabins ग्राउंड फ्लोर: and first floor": "Moradhwaj Verma and Shivraj Sharma",
+  "Weight Office & Kata In/Out": "Vipin Pandey & Rajendra Tiwari",
+  "New Lab": "Mukesh Patle & Sushil",
+  "Canteen Area 1 & 2": "Tuleshwar Verma",
+  "Labour Colony & Bathroom": "Tuleshwar Verma",
+  "Plant Area": "Tuleshwar Verma",
+  "Pipe Mill": "Ravi Kumar Singh, G. Ram Mohan Rao, Hullash Paswan",
+  "Patra Mill Foreman Office": "Sparsh Jha and Toman Sahu",
+  "Patra Mill DC Panel Room": "Danveer Singh Chauhan",
+  "Patra Mill AC Panel Room": "Danveer Singh Chauhan",
+  "SMS Panel Room": "Deepak Bhalla",
+  "SMS Office": "Baldev Singh",
+  "CCM Office": "Rinku Singh",
+  "CCM Panel Room": "Rinku Singh",
+  "Store Office": "Pramod and Suraj",
+  "Workshop": "Dhanji Yadav",
+  "Car Parking Area": "Department HOD",
+  "default": "Department HOD"
+};
+
 export default function AssignTask() {
   // Simple options
   const allDepartments = ["Mandir", "Car Parking Area", "Main Gate", "Main Gate Front Area", "Admin Office - Ground Floor", "Cabins ग्राउंड फ्लोर: and first floor", "Admin Office - First Floor", "Weight Office & Kata In/Out", "New Lab", "Canteen Area 1 & 2", "Pipe Mill", "Patra Mill Foreman Office", "Patra Mill DC Panel Room", "Patra Mill AC Panel Room", "SMS Panel Room", "SMS Office", "CCM Office", "CCM Panel Room", "Store Office", "Workshop", "Labour Colony & Bathroom", "Plant Area"];
   const givenBy = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
   const doerNames = ["Housekeeping Staff", "Company Reja"];
   const frequencies = ["one-time", "daily", "weekly", "monthly"];
-  const hodNames = ["Department HOD", "Department Incharge", "Deparment Manager"];
+
   // Form state
   const [formData, setFormData] = useState({
     department: "",
@@ -24,22 +51,39 @@ export default function AssignTask() {
   const [userRole, setUserRole] = useState("")
   const [userDepartment, setUserDepartment] = useState("")
 
-
   useEffect(() => {
     const role = sessionStorage.getItem("role") || localStorage.getItem("role") || ""
     const department = sessionStorage.getItem("department") || localStorage.getItem("department") || ""
     setUserRole(role)
     setUserDepartment(department)
+
+    // Auto-set department and HOD for users
+    if (role.toLowerCase() === 'user' && department) {
+      setFormData(prev => ({
+        ...prev,
+        department: department,
+        hod: departmentHODs[department] || departmentHODs.default
+      }))
+    }
   }, [])
 
-
   const departments = userRole && userRole.toLowerCase() === 'user' && userDepartment
-    ? allDepartments.filter(dept => dept === userDepartment) // Show only user's department
+    ? allDepartments.filter(dept => dept === userDepartment)
     : allDepartments;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    setFormData((prev) => {
+      const updatedData = { ...prev, [name]: value };
+
+      // Auto-populate HOD when department is selected (only for admin)
+      if (name === "department" && value && userRole.toLowerCase() !== 'user') {
+        updatedData.hod = departmentHODs[value] || departmentHODs.default;
+      }
+
+      return updatedData;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -52,32 +96,25 @@ export default function AssignTask() {
     }
 
     setIsSubmitting(true);
-    // console.log('🔄 Starting form submission...');
 
     try {
-      // console.log('📝 Form data being sent:', formData);
-
       const result = await pushAssignTask(formData);
-      // console.log('🎉 Success result:', result);
-
       alert("Task submitted successfully!");
-      // console.log('✅ Task submitted successfully!');
 
       // Reset form
       setFormData({
-        department: "",
+        department: userRole.toLowerCase() === 'user' ? userDepartment : "",
         given_by: "",
         name: "",
         task_description: "",
         frequency: "",
         task_start_date: "",
-        hod: ""
+        hod: userRole.toLowerCase() === 'user' ? (departmentHODs[userDepartment] || departmentHODs.default) : ""
       });
 
     } catch (error) {
       console.error("Error in handleSubmit:", error);
 
-      // Since data is saving despite timeout, show a different message
       if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
         alert("Task is being processed (backend is taking time). Please check the database to confirm it was saved.");
       } else {
@@ -85,7 +122,6 @@ export default function AssignTask() {
       }
     } finally {
       setIsSubmitting(false);
-      // console.log('🏁 Form submission process completed');
     }
   };
 
@@ -107,6 +143,7 @@ export default function AssignTask() {
                 value={formData.department}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded px-3 py-2"
+                disabled={userRole && userRole.toLowerCase() === 'user' && userDepartment}
               >
                 <option value="">Select</option>
                 {departments.map(dept => (
@@ -131,6 +168,7 @@ export default function AssignTask() {
               </select>
             </div>
 
+            {/* Department HOD - Dynamic based on department selection */}
             <div>
               <label className="block text-sm font-medium mb-1">Department HOD</label>
               <select
@@ -138,14 +176,22 @@ export default function AssignTask() {
                 value={formData.hod}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded px-3 py-2"
+                disabled={userRole && userRole.toLowerCase() === 'user' && userDepartment}
               >
                 <option value="">Select</option>
-                {hodNames.map(hod => (
-                  <option key={hod} value={hod}>{hod}</option>
-                ))}
+                {/* If user role, auto-select their department's HOD */}
+                {userRole && userRole.toLowerCase() === 'user' && userDepartment ? (
+                  <option value={departmentHODs[userDepartment] || departmentHODs.default}>
+                    {departmentHODs[userDepartment] || departmentHODs.default}
+                  </option>
+                ) : (
+                  /* If admin role, show HOD based on selected department */
+                  <option value={departmentHODs[formData.department] || departmentHODs.default}>
+                    {departmentHODs[formData.department] || departmentHODs.default}
+                  </option>
+                )}
               </select>
             </div>
-
 
             {/* Name */}
             <div>
