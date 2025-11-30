@@ -146,10 +146,28 @@ export default function TaskNavigationTabs({
         isToday(task.task_start_date)
       );
 
+      // Filter overdue tasks: task_start_date < today AND submission_date is null
+      const filteredOverdueTasks = overdueData.filter(task => {
+        const taskStartDate = parseTaskStartDate(task.task_start_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (taskStartDate) {
+          const taskDate = new Date(taskStartDate);
+          taskDate.setHours(0, 0, 0, 0);
+
+          const isTaskDateBeforeToday = taskDate < today;
+          const isSubmissionNull = !task.submission_date || task.submission_date === null || task.submission_date === '';
+
+          return isTaskDateBeforeToday && isSubmissionNull;
+        }
+        return false;
+      });
+
       setTaskCounts({
         recent: todayRecentTasks.length,
         upcoming: notDoneData.length,
-        overdue: overdueData.length
+        overdue: filteredOverdueTasks.length
       });
 
     } catch (error) {
@@ -238,6 +256,28 @@ export default function TaskNavigationTabs({
         // For Recent tab, filter only today's tasks
         if (taskView === "recent") {
           if (!isToday(task.rawTaskStartDate)) return false;
+        }
+
+        // For Overdue tab, filter tasks where task_start_date < today AND submission_date is null
+        if (taskView === "overdue") {
+          const taskStartDate = parseTaskStartDate(task.rawTaskStartDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // Check if task_start_date is before today AND submission_date is null
+          if (taskStartDate) {
+            const taskDate = new Date(taskStartDate);
+            taskDate.setHours(0, 0, 0, 0);
+
+            const isTaskDateBeforeToday = taskDate < today;
+            const isSubmissionNull = !task.rawSubmissionDate || task.rawSubmissionDate === null || task.rawSubmissionDate === '';
+
+            if (!(isTaskDateBeforeToday && isSubmissionNull)) {
+              return false;
+            }
+          } else {
+            return false; // Skip tasks with invalid start dates
+          }
         }
 
         return true;

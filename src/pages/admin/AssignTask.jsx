@@ -8,7 +8,7 @@ export default function AssignTask() {
   const givenBy = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
   const doerNames = ["Housekeeping Staff", "Company Reja"];
   const frequencies = ["one-time", "daily", "weekly", "monthly"];
-
+  const hodNames = ["Department HOD", "Department Incharge", "Deparment Manager"];
   // Form state
   const [formData, setFormData] = useState({
     department: "",
@@ -16,7 +16,8 @@ export default function AssignTask() {
     name: "",
     task_description: "",
     frequency: "",
-    task_start_date: ""
+    task_start_date: "",
+    hod: ""
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +70,8 @@ export default function AssignTask() {
         name: "",
         task_description: "",
         frequency: "",
-        task_start_date: ""
+        task_start_date: "",
+        hod: ""
       });
 
     } catch (error) {
@@ -128,6 +130,22 @@ export default function AssignTask() {
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Department HOD</label>
+              <select
+                name="hod"
+                value={formData.hod}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              >
+                <option value="">Select</option>
+                {hodNames.map(hod => (
+                  <option key={hod} value={hod}>{hod}</option>
+                ))}
+              </select>
+            </div>
+
 
             {/* Name */}
             <div>
