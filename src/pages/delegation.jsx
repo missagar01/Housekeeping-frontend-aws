@@ -243,14 +243,21 @@ function AccountDataPage() {
   }, [])
 
   const handleCheckboxClick = useCallback((e, taskId) => {
-    handleSelectItem(taskId, e.target.checked)
-  }, [handleSelectItem])
+    const task = pendingTasks.find(t => t.task_id === taskId)
+    // Only allow selection if task is confirmed by HOD
+    if (task && task.attachment === "confirmed") {
+      handleSelectItem(taskId, e.target.checked)
+    }
+  }, [handleSelectItem, pendingTasks])
 
   const handleSelectAllItems = useCallback((e) => {
     const checked = e.target.checked
     if (checked) {
-      const allIds = filteredPendingTasks.map(task => task.task_id)
-      setSelectedItems(new Set(allIds))
+      // Only select tasks where attachment is "confirmed"
+      const allConfirmedIds = filteredPendingTasks
+        .filter(task => task.attachment === "confirmed")
+        .map(task => task.task_id)
+      setSelectedItems(new Set(allConfirmedIds))
     } else {
       setSelectedItems(new Set())
       setAdditionalData({})
@@ -315,7 +322,7 @@ function AccountDataPage() {
           task_id: task.task_id,
           status: additionalData[id] || "Yes",
           remark: remarksData[id] || "",
-          attachment: task.attachment || "No", // Use the existing attachment value (including "confirmed")
+          attachment: task.attachment, // Use the existing attachment value (including "confirmed")
           image_file: imageData ? imageData.file : null,
           image_url: task.image || null
         };
@@ -483,7 +490,7 @@ function AccountDataPage() {
                         Freq
                       </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Attachment
+                        Confirmed By HOD
                       </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-green-50 whitespace-nowrap">
                         Actual Date
@@ -762,9 +769,11 @@ function AccountDataPage() {
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 w-12">
                                   <input
                                     type="checkbox"
-                                    className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                                    className={`h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500 ${task.attachment !== "confirmed" ? "opacity-50 cursor-not-allowed" : ""
+                                      }`}
                                     checked={isSelected}
                                     onChange={(e) => handleCheckboxClick(e, task.task_id)}
+                                    disabled={task.attachment !== "confirmed"} // Disable if not confirmed
                                   />
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
@@ -797,7 +806,7 @@ function AccountDataPage() {
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
                                   <select
-                                    disabled={!isSelected}
+                                    disabled={!isSelected || task.attachment !== "confirmed"}
                                     value={additionalData[task.task_id] || ""}
                                     onChange={(e) => {
                                       setAdditionalData(prev => ({ ...prev, [task.task_id]: e.target.value }))
@@ -824,7 +833,7 @@ function AccountDataPage() {
                                         ? "Remarks required*"
                                         : "Enter remarks"
                                     }
-                                    disabled={!isSelected || !additionalData[task.task_id]}
+                                    disabled={!isSelected || !additionalData[task.task_id] || task.attachment !== "confirmed"}
                                     value={remarksData[task.task_id] || ""}
                                     onChange={(e) => setRemarksData(prev => ({ ...prev, [task.task_id]: e.target.value }))}
                                     className={`border rounded-md px-2 py-1 w-full border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm break-words ${additionalData[task.task_id] === "No" && (!remarksData[task.task_id] || remarksData[task.task_id].trim() === "")
