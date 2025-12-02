@@ -51,10 +51,12 @@ const clearStorage = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
     const stored = readFromStorage();
     if (stored) setUser(stored);
+    setIsHydrating(false);
   }, []);
 
   const setAuth = useCallback((nextUser) => {
@@ -81,11 +83,12 @@ export const AuthProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       user,
+      isHydrating,
       isAuthenticated: !!user?.name,
       setAuth,
       logout,
     }),
-    [user, setAuth, logout],
+    [user, isHydrating, setAuth, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

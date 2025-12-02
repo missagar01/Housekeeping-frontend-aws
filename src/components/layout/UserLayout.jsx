@@ -7,13 +7,15 @@ import { useAuth } from "../../context/AuthContext"
 const UserLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const { user, logout, isHydrating } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
 
   // Check authentication on component mount
   useEffect(() => {
+    if (isHydrating) return
+
     const storedUsername = user?.name || ""
 
     if (!storedUsername) {
@@ -23,7 +25,7 @@ const UserLayout = ({ children }) => {
 
     setUsername(storedUsername)
     setIsAdmin(storedUsername.toLowerCase() === 'admin')
-  }, [navigate, user])
+  }, [navigate, user, isHydrating])
 
   // Logout handler
   const handleLogout = async () => {

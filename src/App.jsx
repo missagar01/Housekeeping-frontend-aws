@@ -11,7 +11,9 @@ import Setting from "./pages/Setting"
 import { useAuth } from "./context/AuthContext"
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user } = useAuth()
+  const { user, isHydrating } = useAuth()
+
+  if (isHydrating) return null;
   const username = user?.name
   const userRole = user?.role
 

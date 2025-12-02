@@ -27,7 +27,7 @@ import {
 export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isHydrating } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDataSubmenuOpen, setIsDataSubmenuOpen] = useState(false);
   const [username, setUsername] = useState("");
@@ -39,6 +39,10 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
 
   // Check authentication on component mount
   useEffect(() => {
+    if (isHydrating) {
+      return;
+    }
+
     if (!user?.name) {
       navigate("/login");
       return;
@@ -48,7 +52,7 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
     setUserRole(user.role || "user");
     setUserEmail(user.email || "");
     setIsSuperAdmin((user.name || "").toLowerCase() === "admin");
-  }, [navigate, user]);
+  }, [navigate, user, isHydrating]);
 
   // Handle logout
   const handleLogout = async () => {

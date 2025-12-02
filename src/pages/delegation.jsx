@@ -16,7 +16,7 @@ const CONFIG = {
 }
 
 function AccountDataPage() {
-  const { user } = useAuth()
+  const { user, isHydrating } = useAuth()
   const [pendingTasks, setPendingTasks] = useState([])
   const [historyTasks, setHistoryTasks] = useState([])
   const [selectedItems, setSelectedItems] = useState(new Set())
@@ -50,9 +50,10 @@ function AccountDataPage() {
 
   // Get user role and department
   useEffect(() => {
+    if (isHydrating) return
     setUserRole(user?.role || "")
     setUserDepartment(user?.department || "")
-  }, [user])
+  }, [user, isHydrating])
 
   // Load data
   const loadData = useCallback(async () => {
