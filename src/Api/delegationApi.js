@@ -111,6 +111,7 @@ export const updateTask = async (taskId, updateData = {}) => {
         appendIfValid(formData, "status", updateData.status);
         appendIfValid(formData, "remark", updateData.remark);
         appendIfValid(formData, "attachment", updateData.attachment);
+        appendIfValid(formData, "name", updateData.name);
 
         // Handle submission date for completed tasks
         if (updateData.status === "Yes" || updateData.status === "Done") {
