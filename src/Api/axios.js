@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3005/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://housekeeping-backend.sagartmt.com/api";
 const REQUEST_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT_MS || 120000);
 
 const api = axios.create({
