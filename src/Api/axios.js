@@ -1,19 +1,17 @@
 import axios from "axios";
 
 const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
-const FALLBACK_PROD_BASE = "https://housekeeping-backend.sagartmt.com/api";
-const DEFAULT_LOCAL_BASE = "http://localhost:3005/api";
+const FALLBACK_BASE = "https://housekeeping-backend.sagartmt.com/api";
 
-// Resolve API base so localhost points to local backend, prod points to live backend,
-// and enforce HTTPS when the app itself is served over HTTPS (Vercel).
+// Resolve API base; prefer env, else fallback to production HTTPS backend.
 const resolveApiBase = () => {
   const isBrowser = typeof window !== "undefined";
-  const isLocalhost = isBrowser && /localhost|127\.0\.0\.1/.test(window.location.hostname);
   const isHttpsPage = isBrowser && window.location?.protocol === "https:";
 
-  let base = envApiBase || (isLocalhost ? DEFAULT_LOCAL_BASE : FALLBACK_PROD_BASE);
+  let base = envApiBase || FALLBACK_BASE;
   base = base.replace(/\/+$/, "");
 
+  // Auto-upgrade to https if somehow an http URL is provided while on https page.
   if (isHttpsPage && base.startsWith("http://")) {
     base = base.replace(/^http:\/\//, "https://");
   }
