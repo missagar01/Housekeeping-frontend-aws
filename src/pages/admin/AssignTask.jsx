@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../components/layout/AdminLayout";
 import { pushAssignTask } from "../../Api/assignTaskApi";
+import { useAuth } from "../../context/AuthContext";
 
 const departmentHODs = {
   Mandir: "Komal Sahu and Rinku Gautam",
@@ -58,6 +59,7 @@ const doerNames = ["Housekeeping Staff", "Company Reja"];
 const frequencies = ["one-time", "daily", "weekly", "monthly"];
 
 export default function AssignTask() {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     department: "",
     given_by: "",
@@ -74,8 +76,8 @@ export default function AssignTask() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || "";
-    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || "";
+    const role = user?.role || "";
+    const department = user?.department || "";
     setUserRole(role);
     setUserDepartment(department);
 
@@ -86,7 +88,7 @@ export default function AssignTask() {
         hod: departmentHODs[department] || departmentHODs.default,
       }));
     }
-  }, []);
+  }, [user]);
 
   const departments = useMemo(() => {
     if (userRole.toLowerCase() === "user" && userDepartment) {

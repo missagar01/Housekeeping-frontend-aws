@@ -1,6 +1,27 @@
 import axios from "axios";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://housekeeping-backend.sagartmt.com/api";
+const envApiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const FALLBACK_PROD_BASE = "https://housekeeping-backend.sagartmt.com/api";
+const DEFAULT_LOCAL_BASE = "http://localhost:3005/api";
+
+// Resolve API base so localhost points to local backend, prod points to live backend,
+// and enforce HTTPS when the app itself is served over HTTPS (Vercel).
+const resolveApiBase = () => {
+  const isBrowser = typeof window !== "undefined";
+  const isLocalhost = isBrowser && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+  const isHttpsPage = isBrowser && window.location?.protocol === "https:";
+
+  let base = envApiBase || (isLocalhost ? DEFAULT_LOCAL_BASE : FALLBACK_PROD_BASE);
+  base = base.replace(/\/+$/, "");
+
+  if (isHttpsPage && base.startsWith("http://")) {
+    base = base.replace(/^http:\/\//, "https://");
+  }
+
+  return base;
+};
+
+export const API_BASE_URL = resolveApiBase();
 const REQUEST_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT_MS || 120000);
 
 const api = axios.create({

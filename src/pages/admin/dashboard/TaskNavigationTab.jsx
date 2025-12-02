@@ -133,7 +133,7 @@ export default function TaskNavigationTabs({
   const loadTaskCounts = useCallback(async () => {
     try {
       const [recentData, overdueData, notDoneData] = await Promise.all([
-        taskApi.getRecentTasks(),
+        taskApi.getTodayTasks(),
         taskApi.getOverdueTasks(),
         taskApi.getNotDoneTasks()
       ]);
@@ -184,7 +184,7 @@ export default function TaskNavigationTabs({
       // Call appropriate API based on taskView
       switch (taskView) {
         case "recent":
-          apiData = await taskApi.getRecentTasks();
+          apiData = await taskApi.getTodayTasks();
           break;
         case "overdue":
           apiData = await taskApi.getOverdueTasks();

@@ -3,9 +3,11 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { authAPI } from "../Api/loginApi";
+import { useAuth } from "../context/AuthContext";
 
 const LoginPage = () => {
   const navigate = useNavigate()
+  const { setAuth } = useAuth()
 
   const [isLoginLoading, setIsLoginLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -33,6 +35,7 @@ const LoginPage = () => {
 
       if (response.message === 'Login successful' && response.user) {
         const user = response.user;
+        const token = response.token || response.access_token || "";
 
         // GET USER DEPARTMENT FROM PROFILE API
         let userDepartment = "";
@@ -44,18 +47,15 @@ const LoginPage = () => {
           console.warn("Could not fetch user profile:", profileError);
         }
 
-        // Store user data
-        sessionStorage.setItem('user-name', user.user_name || "");
-        sessionStorage.setItem('role', user.role || "");
-        sessionStorage.setItem('email_id', user.email_id || "");
-        sessionStorage.setItem('user_id', user.id || "");
-        sessionStorage.setItem('department', userDepartment);
-
-        localStorage.setItem('user-name', user.user_name || "");
-        localStorage.setItem('role', user.role || "");
-        localStorage.setItem('email_id', user.email_id || "");
-        localStorage.setItem('user_id', user.id || "");
-        localStorage.setItem('department', userDepartment);
+        // Store user data centrally
+        setAuth({
+          name: user.user_name || "",
+          role: user.role || "",
+          email: user.email_id || "",
+          userId: user.id || "",
+          department: userDepartment,
+          token: token || "",
+        });
 
         showToast(`Welcome back, ${user.user_name}!`, "success");
 

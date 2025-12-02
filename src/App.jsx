@@ -8,10 +8,12 @@ import AdminAssignTask from "./pages/admin/AssignTask"
 import AccountDataPage from "./pages/delegation"
 import "./index.css"
 import Setting from "./pages/Setting"
+import { useAuth } from "./context/AuthContext"
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const username = localStorage.getItem("user-name")
-  const userRole = localStorage.getItem("role")
+  const { user } = useAuth()
+  const username = user?.name
+  const userRole = user?.role
 
   if (!username) {
     return <Navigate to="/login" replace />

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ListTodo, CheckCircle2, Clock, AlertTriangle, BarChart3, XCircle } from "lucide-react";
 import { dashboardAPI } from '../../../Api/dashboardCount';
-import { getTodaysTasksCount } from '../../../Api/taskCountUtils';
 
 export default function StatisticsCards({ dashboardType = "default", dateRange = null }) {
   const [stats, setStats] = useState({
@@ -12,7 +11,6 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
     overdue: 0,
     progress_percent: 0
   });
-  const [todaysTasksCount, setTodaysTasksCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -21,8 +19,6 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
       setLoading(true);
       const data = await dashboardAPI.getSummary();
       setStats(data);
-      const todayCount = await getTodaysTasksCount();
-      setTodaysTasksCount(todayCount);
       setError(null);
     }
     catch (err) {
@@ -57,7 +53,7 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
 
   // Calculate all percentages
   const completionRate = progress_percent || (total > 0 ? (completed / total) * 100 : 0);
-  const pendingRate = total > 0 ? (todaysTasksCount / total) * 100 : 0;
+  const pendingRate = total > 0 ? (pending / total) * 100 : 0;
   const notDoneRate = total > 0 ? (not_done / total) * 100 : 0;
   const overdueRate = total > 0 ? (overdue / total) * 100 : 0;
 
@@ -121,9 +117,9 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
                 )}
               </div>
               <div className="p-3 sm:p-4">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-700">{todaysTasksCount}</div>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-700">{pending}</div>
                 <p className="text-xs text-amber-600">
-                  {dateRange ? "Pending in period" : "Including today"}
+                  {dateRange ? "Pending in period" : "Pending tasks"}
                 </p>
               </div>
             </div>
@@ -155,7 +151,7 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
                 )}
               </div>
               <div className="p-3 sm:p-4">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-700">0</div>
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-700">{overdue}</div>
                 <p className="text-xs text-red-600">
                   {dateRange ? "Overdue in period" : "Past due"}
                 </p>
@@ -180,7 +176,7 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
                 <div className="relative w-32 h-32 xs:w-36 xs:h-36 sm:w-40 sm:h-40 md:w-44 md:h-44 lg:w-48 lg:h-48 xl:w-52 xl:h-52">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="40" stroke="#e5e7eb" strokeWidth="8" fill="none" />
-                    <circle cx="50" cy="50" r="40" stroke="#ef4444" strokeWidth="8" fill="none" strokeLinecap="line" strokeDasharray={`${0} ${circumference}`} />
+                    <circle cx="50" cy="50" r="40" stroke="#ef4444" strokeWidth="8" fill="none" strokeLinecap="line" strokeDasharray={`${overdueDash} ${circumference}`} />
                     <circle cx="50" cy="50" r="40" stroke="#6b7280" strokeWidth="8" fill="none" strokeLinecap="line" strokeDasharray={`${notDoneDash} ${circumference}`} strokeDashoffset={-overdueDash} />
                     <circle cx="50" cy="50" r="40" stroke="#f59e0b" strokeWidth="8" fill="none" strokeLinecap="line" strokeDasharray={`${pendingDash} ${circumference}`} strokeDashoffset={-(overdueDash + notDoneDash)} />
                     <circle cx="50" cy="50" r="40" stroke="#10b981" strokeWidth="8" fill="none" strokeLinecap="line" strokeDasharray={`${completedDash} ${circumference}`} strokeDashoffset={-(overdueDash + notDoneDash + pendingDash)} />
@@ -217,7 +213,7 @@ export default function StatisticsCards({ dashboardType = "default", dateRange =
                   <div className="flex items-center space-x-1 xs:space-x-2">
                     <div className="w-2 h-2 xs:w-3 xs:h-3 sm:w-4 sm:h-4 rounded-full bg-red-500 flex-shrink-0"></div>
                     <span className="font-medium">Overdue:</span>
-                    <span className="text-gray-700">0%</span>
+                    <span className="text-gray-700">{overdueRate.toFixed(1)}%</span>
                   </div>
                 </div>
               </div>

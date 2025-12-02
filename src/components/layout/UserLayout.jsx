@@ -2,33 +2,32 @@
 
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
+import { useAuth } from "../../context/AuthContext"
 
 const UserLayout = ({ children }) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [username, setUsername] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
 
   // Check authentication on component mount
   useEffect(() => {
-    const storedUsername = localStorage.getItem('user-name')
+    const storedUsername = user?.name || ""
 
     if (!storedUsername) {
-      // Redirect to login if no username found
       navigate('/login')
       return
     }
 
     setUsername(storedUsername)
     setIsAdmin(storedUsername.toLowerCase() === 'admin')
-  }, [navigate])
+  }, [navigate, user])
 
   // Logout handler
-  const handleLogout = () => {
-    localStorage.removeItem("user-name");
-
-    localStorage.removeItem('role')
+  const handleLogout = async () => {
+    await logout()
     navigate('/login')
   }
 

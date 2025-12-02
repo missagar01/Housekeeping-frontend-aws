@@ -35,6 +35,14 @@ export const authAPI = {
       throw new Error(error.response?.data?.message || "Failed to fetch user profile");
     }
   },
+  logout: async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (error) {
+      // Best-effort logout; swallow errors so client can still clear session
+      console.warn("Logout API failed:", error?.message || error);
+    }
+  },
 };
 
 export default api;

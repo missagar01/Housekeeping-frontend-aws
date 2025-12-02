@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import {
   CheckSquare,
   ClipboardList,
@@ -26,6 +27,7 @@ import {
 export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDataSubmenuOpen, setIsDataSubmenuOpen] = useState(false);
   const [username, setUsername] = useState("");
@@ -37,30 +39,20 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
 
   // Check authentication on component mount
   useEffect(() => {
-    const storedUsername = localStorage.getItem("user-name");
-    const storedRole = localStorage.getItem("role");
-    const storedEmail = localStorage.getItem("email_id");
-
-    if (!storedUsername) {
-      // Redirect to login if not authenticated
+    if (!user?.name) {
       navigate("/login");
       return;
     }
 
-    setUsername(storedUsername);
-    setUserRole(storedRole || "user");
-    setUserEmail(storedEmail);
-
-    // Check if this is the super admin (username = 'admin')
-    setIsSuperAdmin(storedUsername === "admin");
-  }, [navigate]);
+    setUsername(user.name);
+    setUserRole(user.role || "user");
+    setUserEmail(user.email || "");
+    setIsSuperAdmin((user.name || "").toLowerCase() === "admin");
+  }, [navigate, user]);
 
   // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem("user-name");
-    localStorage.removeItem("role");
-    localStorage.removeItem("email_id");
-    localStorage.removeItem("token");
+  const handleLogout = async () => {
+    await logout();
     window.location.href = "/login";
   };
 
@@ -129,16 +121,16 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   ];
 
   const getAccessibleDepartments = () => {
-    const userRole = localStorage.getItem("role") || "user";
+    const role = userRole || "user";
     return dataCategories.filter(
-      (cat) => !cat.showFor || cat.showFor.includes(userRole)
+      (cat) => !cat.showFor || cat.showFor.includes(role)
     );
   };
 
   // Filter routes based on user role and super admin status
   const getAccessibleRoutes = () => {
-    const userRole = localStorage.getItem("role") || "user";
-    return routes.filter((route) => route.showFor.includes(userRole));
+    const role = userRole || "user";
+    return routes.filter((route) => route.showFor.includes(role));
   };
 
   // Check if the current path is a data category page

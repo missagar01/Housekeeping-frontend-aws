@@ -8,13 +8,11 @@ const safeGet = async (endpoint, params = {}) => {
 };
 
 export const taskApi = {
-  // Scope to today's window to reduce payload; backend can adjust if it ignores params
-  getRecentTasks: () =>
-    safeGet("/assigntask/generate", {
-      start_date: todayISO(),
-      end_date: todayISO(),
-      limit: 500,
-    }),
+  // Explicit today endpoint for dashboard "Recent/Today" tab
+  getTodayTasks: () => safeGet("/assigntask/generate/today"),
+
+  // Scope to today's window to reduce payload; kept for compatibility
+  getRecentTasks: () => taskApi.getTodayTasks(),
   getOverdueTasks: () =>
     safeGet("/assigntask/generate/overdue", {
       end_date: todayISO(),
@@ -40,7 +38,7 @@ export const taskApi = {
 
   getTaskCounts: async () => {
     const [recent, overdue, notDone] = await Promise.all([
-      taskApi.getRecentTasks(),
+      taskApi.getTodayTasks(),
       taskApi.getOverdueTasks(),
       taskApi.getNotDoneTasks(),
     ]);

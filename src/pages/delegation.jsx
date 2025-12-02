@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { CheckCircle2, Upload, X, Search, History, ArrowLeft } from "lucide-react"
 import AdminLayout from "../components/layout/AdminLayout"
 import { getPendingTasks, getHistoryTasks, submitTasks, confirmTask } from "../Api/delegationApi"
+import { useAuth } from "../context/AuthContext"
 
 // Configuration object
 const CONFIG = {
@@ -15,6 +16,7 @@ const CONFIG = {
 }
 
 function AccountDataPage() {
+  const { user } = useAuth()
   const [pendingTasks, setPendingTasks] = useState([])
   const [historyTasks, setHistoryTasks] = useState([])
   const [selectedItems, setSelectedItems] = useState(new Set())
@@ -48,11 +50,9 @@ function AccountDataPage() {
 
   // Get user role and department
   useEffect(() => {
-    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || ""
-    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || ""
-    setUserRole(role)
-    setUserDepartment(department)
-  }, [])
+    setUserRole(user?.role || "")
+    setUserDepartment(user?.department || "")
+  }, [user])
 
   // Load data
   const loadData = useCallback(async () => {
@@ -60,10 +60,14 @@ function AccountDataPage() {
     setError(null)
     try {
       if (showHistory) {
-        const data = await getHistoryTasks()
+        const data = await getHistoryTasks(
+          selectedDepartment ? { department: selectedDepartment } : {}
+        )
         setHistoryTasks(data)
       } else {
-        const data = await getPendingTasks()
+        const data = await getPendingTasks(
+          selectedDepartment ? { department: selectedDepartment } : {}
+        )
         setPendingTasks(data)
       }
     } catch (err) {
@@ -72,7 +76,7 @@ function AccountDataPage() {
     } finally {
       setLoading(false)
     }
-  }, [showHistory])
+  }, [showHistory, selectedDepartment])
 
   useEffect(() => {
     loadData()
@@ -129,13 +133,6 @@ function AccountDataPage() {
 
   const filteredPendingTasks = useMemo(() => {
     return pendingTasks.filter(task => {
-      // If user role is 'user', only show tasks from their department
-      if (userRole && userRole.toLowerCase() === 'user' && userDepartment) {
-        if (task.department !== userDepartment) {
-          return false
-        }
-      }
-
       const matchesSearch = searchTerm
         ? Object.values(task).some(value =>
           value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
@@ -158,18 +155,11 @@ function AccountDataPage() {
       if (!dateB || isNaN(dateB.getTime())) return -1
       return dateA.getTime() - dateB.getTime()
     })
-  }, [pendingTasks, searchTerm, selectedMembers, selectedDepartment, userRole, userDepartment])
+  }, [pendingTasks, searchTerm, selectedMembers, selectedDepartment])
 
   const filteredHistoryData = useMemo(() => {
     return historyTasks
       .filter(item => {
-        // If user role is 'user', only show tasks from their department
-        if (userRole && userRole.toLowerCase() === 'user' && userDepartment) {
-          if (item.department !== userDepartment) {
-            return false
-          }
-        }
-
         const matchesSearch = searchTerm
           ? Object.entries(item).some(([key, value]) => {
             if (['image', 'admin_done'].includes(key)) return false
@@ -210,7 +200,7 @@ function AccountDataPage() {
         const dateB = b.submission_date ? new Date(b.submission_date) : new Date(0)
         return dateB.getTime() - dateA.getTime()
       })
-  }, [historyTasks, searchTerm, selectedMembers, selectedDepartment, startDate, endDate, userRole, userDepartment])
+  }, [historyTasks, searchTerm, selectedMembers, selectedDepartment, startDate, endDate])
 
   const getDepartmentsList = useMemo(() => {
     const allDepartments = [...new Set([...pendingTasks, ...historyTasks]
@@ -475,6 +465,9 @@ function AccountDataPage() {
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        S.No
+                      </th>
+                      <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Task ID
                       </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -508,8 +501,13 @@ function AccountDataPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredHistoryData.length > 0 ? (
-                      filteredHistoryData.map((history) => (
+                      filteredHistoryData.map((history, index) => (
                         <tr key={history.task_id} className="hover:bg-gray-50">
+                          <td className="px-2 sm:px-3 py-2 sm:py-4">
+                            <div className="text-xs sm:text-sm font-medium text-gray-900 break-words text-center">
+                              {index + 1}
+                            </div>
+                          </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4">
                             <div className="text-xs sm:text-sm font-medium text-gray-900 break-words">
                               {history.task_id || "—"}
@@ -585,7 +583,7 @@ function AccountDataPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={13} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
+                        <td colSpan={11} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
                           {searchTerm || selectedMembers.length > 0 || startDate || endDate
                             ? "No historical records matching your filters"
                             : "No completed records found"}

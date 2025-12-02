@@ -2,8 +2,9 @@ import axios from "./axios";
 
 // ========== CONSTANTS ==========
 const ENABLE_LOGS = true;
-const API_BASE_URL = "/assigntask/generate";
-const API_TODAY_URL = "http://localhost:3005/api/assigntask/generate/today";
+const API_TASK_BASE = "/assigntask/generate"; // still used for confirm/update
+const API_PENDING_URL = "/assigntask/generate/pending";
+const API_HISTORY_URL = "/assigntask/generate/history";
 const DATE_FORMAT_OPTIONS = { year: "numeric", month: "2-digit", day: "2-digit" };
 
 // ========== UTILITIES ==========
@@ -65,42 +66,17 @@ const apiRequest = async (method, url, data = null, config = {}) => {
 };
 
 // ========== TASK API FUNCTIONS ==========
-export const getAllTasks = async () => {
+export const getPendingTasks = async (filters = {}) => {
     try {
-        return await apiRequest("get", API_BASE_URL);
-    } catch (error) {
-        return handleApiError("fetching tasks", error);
-    }
-};
-
-export const getTodayTasks = async () => {
-    try {
-        return await apiRequest("get", API_TODAY_URL);
-    } catch (error) {
-        return handleApiError("fetching today's tasks", error);
-    }
-};
-
-export const getPendingTasks = async () => {
-    try {
-        const todayTasks = await getTodayTasks();
-        const pendingTasks = todayTasks.filter((task) => !task.submission_date);
-        return pendingTasks;
+        return await apiRequest("get", API_PENDING_URL, null, { params: filters });
     } catch (error) {
         return handleApiError("fetching pending tasks", error);
     }
 };
 
-export const getHistoryTasks = async () => {
+export const getHistoryTasks = async (filters = {}) => {
     try {
-        const allTasks = await getAllTasks();
-
-        const completedTasks = allTasks.filter(
-            (task) => task.task_start_date && task.submission_date
-        );
-
-        // log("📜 History tasks:", completedTasks.length);
-        return completedTasks;
+        return await apiRequest("get", API_HISTORY_URL, null, { params: filters });
     } catch (error) {
         return handleApiError("fetching history tasks", error);
     }
@@ -118,7 +94,7 @@ export const confirmTask = async (taskId) => {
 
         return await apiRequest(
             "post",
-            `${API_BASE_URL}/${taskId}/confirm`,
+            `${API_TASK_BASE}/${taskId}/confirm`,
             formData,
             config
         );
@@ -143,10 +119,8 @@ export const updateTask = async (taskId, updateData = {}) => {
 
         // Handle image upload
         if (updateData.image_file instanceof File) {
-            // log("Uploading new image:", updateData.image_file.name);
             formData.append("image", updateData.image_file);
         } else if (updateData.image_url) {
-            // log(" Using existing image URL");
             formData.append("image", updateData.image_url);
         }
 
@@ -156,7 +130,7 @@ export const updateTask = async (taskId, updateData = {}) => {
 
         return await apiRequest(
             "patch",
-            `${API_BASE_URL}/${taskId}`,
+            `${API_TASK_BASE}/${taskId}`,
             formData,
             config
         );
@@ -166,8 +140,6 @@ export const updateTask = async (taskId, updateData = {}) => {
 };
 
 export const submitTasks = async (tasks = []) => {
-    // log(`Submitting ${tasks.length} tasks...`);
-
     const updatePromises = tasks.map((task) => {
         const payload = {
             status: task.status || "Yes",
