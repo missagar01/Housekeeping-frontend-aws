@@ -167,7 +167,8 @@ const Setting = () => {
 
   // Filtered data
   const filteredUsers = userData.filter(user =>
-    !usernameFilter || user.user_name?.toLowerCase().includes(usernameFilter.toLowerCase())
+    user.role !== "admin" &&
+    (!usernameFilter || user.user_name?.toLowerCase().includes(usernameFilter.toLowerCase()))
   );
 
   const getStatusColor = (status) => {
