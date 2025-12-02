@@ -133,6 +133,8 @@ function AccountDataPage() {
   }
 
   const filteredPendingTasks = useMemo(() => {
+    const normalizedSelectedDept = selectedDepartment?.toLowerCase().trim() || "";
+
     return pendingTasks.filter(task => {
       const matchesSearch = searchTerm
         ? Object.values(task).some(value =>
@@ -145,7 +147,7 @@ function AccountDataPage() {
         : true
 
       const matchesDepartment = selectedDepartment
-        ? task.department === selectedDepartment
+        ? (task.department || "").toLowerCase().trim() === normalizedSelectedDept
         : true
 
       return matchesSearch && matchesMember && matchesDepartment
@@ -159,6 +161,8 @@ function AccountDataPage() {
   }, [pendingTasks, searchTerm, selectedMembers, selectedDepartment])
 
   const filteredHistoryData = useMemo(() => {
+    const normalizedSelectedDept = selectedDepartment?.toLowerCase().trim() || "";
+
     return historyTasks
       .filter(item => {
         const matchesSearch = searchTerm
@@ -173,7 +177,7 @@ function AccountDataPage() {
           : true
 
         const matchesDepartment = selectedDepartment
-          ? item.department === selectedDepartment
+          ? (item.department || "").toLowerCase().trim() === normalizedSelectedDept
           : true
 
         let matchesDateRange = true
@@ -437,7 +441,7 @@ function AccountDataPage() {
                         id="department-filter"
                         value={selectedDepartment}
                         onChange={(e) => setSelectedDepartment(e.target.value)}
-                        className="text-xs sm:text-sm border border-gray-200 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                        className="text-xs sm:text-sm border border-gray-200 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-gray-500 w-full sm:max-w-xs"
                       >
                         <option value="">All Departments</option>
                         {getDepartmentsList.map((department, idx) => (
@@ -449,14 +453,14 @@ function AccountDataPage() {
                     </div>
                   )}
 
-                  {(selectedMembers.length > 0 || selectedDepartment || startDate || endDate || searchTerm) && (
-                    <button
-                      onClick={resetFilters}
-                      className="px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-xs sm:text-sm w-full sm:w-auto"
-                    >
-                      Clear All Filters
-                    </button>
-                  )}
+                      {(selectedMembers.length > 0 || selectedDepartment || startDate || endDate || searchTerm) && (
+                        <button
+                          onClick={resetFilters}
+                          className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-xs sm:text-sm w-full sm:w-auto"
+                        >
+                          Clear All Filters
+                        </button>
+                      )}
                 </div>
               </div>
 
