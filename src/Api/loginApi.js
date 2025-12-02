@@ -1,4 +1,4 @@
-import api from '../Api/axios';
+import api from "../Api/axios";
 
 // const API_BASE_URL = 'http://localhost:3005/api';
 
@@ -11,44 +11,30 @@ import api from '../Api/axios';
 
 // Auth API
 export const authAPI = {
-    login: async (credentials) => {
-        try {
-            // console.log('🔄 Sending login request:', credentials);
-
-            const response = await api.post('/auth/login', {
-                user_name: credentials.username,
-                password: credentials.password
-            });
-
-            // console.log('✅ Login response:', response.data);
-            return response.data;
-
-        } catch (error) {
-            console.error('Login API Error:', {
-                message: error.message,
-                status: error.response?.status,
-                data: error.response?.data
-            });
-
-            // Throw the actual error message from backend
-            if (error.response?.data?.error) {
-                throw new Error(error.response.data.error);
-            } else if (error.response?.data?.message) {
-                throw new Error(error.response.data.message);
-            } else {
-                throw new Error('Login failed. Please try again.');
-            }
-        }
-    },
-    getUserProfile: async (userId) => {
-        try {
-            const response = await api.get(`/users/${userId}`);
-            return response.data;
-        } catch (error) {
-            console.error('Get User Profile API Error:', error);
-            throw new Error('Failed to fetch user profile');
-        }
+  login: async (credentials) => {
+    try {
+      const response = await api.post("/auth/login", {
+        user_name: credentials.username,
+        password: credentials.password,
+      });
+      return response.data;
+    } catch (error) {
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Login failed. Please try again.";
+      throw new Error(msg);
     }
+  },
+  getUserProfile: async (userId) => {
+    try {
+      const response = await api.get(`/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || "Failed to fetch user profile");
+    }
+  },
 };
 
 export default api;

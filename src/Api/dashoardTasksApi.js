@@ -1,89 +1,56 @@
-// api/taskApi.js
-import api from '../Api/axios';
+import api from "../Api/axios";
+
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+const safeGet = async (endpoint, params = {}) => {
+  const response = await api.get(endpoint, { params });
+  return response.data;
+};
 
 export const taskApi = {
-    // Get Recent Tasks (Today's tasks)
-    getRecentTasks: async () => {
-        try {
-            const response = await api.get('/assigntask/generate');
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching recent tasks:', error);
-            throw error;
-        }
-    },
+  // Scope to today's window to reduce payload; backend can adjust if it ignores params
+  getRecentTasks: () =>
+    safeGet("/assigntask/generate", {
+      start_date: todayISO(),
+      end_date: todayISO(),
+      limit: 500,
+    }),
+  getOverdueTasks: () =>
+    safeGet("/assigntask/generate/overdue", {
+      end_date: todayISO(),
+      limit: 500,
+    }),
+  getNotDoneTasks: () =>
+    safeGet("/assigntask/generate/not-done", {
+      start_date: todayISO(),
+      limit: 500,
+    }),
 
-    // Get Overdue Tasks
-    getOverdueTasks: async () => {
-        try {
-            const response = await api.get('/assigntask/generate/overdue');
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching overdue tasks:', error);
-            throw error;
-        }
-    },
+  getTasksWithFilters: (taskType, page = 1, limit = 50, filters = {}) => {
+    let endpoint = "/assigntask/generate";
+    if (taskType === "overdue") endpoint = "/assigntask/generate/overdue";
+    if (taskType === "not-done") endpoint = "/assigntask/generate/not-done";
+    return safeGet(endpoint, {
+      page,
+      limit,
+      start_date: filters.start_date || todayISO(),
+      ...filters,
+    });
+  },
 
-    // Get Not Done Tasks
-    getNotDoneTasks: async () => {
-        try {
-            const response = await api.get('/assigntask/generate/not-done');
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching not done tasks:', error);
-            throw error;
-        }
-    },
+  getTaskCounts: async () => {
+    const [recent, overdue, notDone] = await Promise.all([
+      taskApi.getRecentTasks(),
+      taskApi.getOverdueTasks(),
+      taskApi.getNotDoneTasks(),
+    ]);
 
-    // Get tasks with pagination + filters
-    getTasksWithFilters: async (taskType, page = 1, limit = 50, filters = {}) => {
-        try {
-            let endpoint = '';
-
-            switch (taskType) {
-                case 'recent':
-                    endpoint = '/assigntask/generate';
-                    break;
-                case 'overdue':
-                    endpoint = '/assigntask/generate/overdue';
-                    break;
-                case 'not-done':
-                    endpoint = '/assigntask/generate/not-done';
-                    break;
-                default:
-                    endpoint = '/assigntask/generate';
-            }
-
-            const params = { page, limit, ...filters };
-
-            const response = await api.get(endpoint, { params });
-            return response.data;
-
-        } catch (error) {
-            console.error(`Error fetching ${taskType} tasks:`, error);
-            throw error;
-        }
-    },
-
-    // Count Task Data
-    getTaskCounts: async () => {
-        try {
-            const [recent, overdue, notDone] = await Promise.all([
-                taskApi.getRecentTasks(),
-                taskApi.getOverdueTasks(),
-                taskApi.getNotDoneTasks()
-            ]);
-
-            return {
-                recent: recent.length,
-                overdue: overdue.length,
-                notDone: notDone.length
-            };
-        } catch (error) {
-            console.error('Error fetching task counts:', error);
-            throw error;
-        }
-    }
+    return {
+      recent: recent.length,
+      overdue: overdue.length,
+      notDone: notDone.length,
+    };
+  },
 };
 
 export default taskApi;

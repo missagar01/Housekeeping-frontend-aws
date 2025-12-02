@@ -10,10 +10,7 @@ export default function TaskNavigationTabs({
   taskView,
   setTaskView,
   searchQuery,
-  setSearchQuery,
-  filterStaff,
   setFilterStaff,
-  departmentData,
   getFrequencyColor,
   dashboardStaffFilter,
   departmentFilter

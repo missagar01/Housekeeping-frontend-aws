@@ -1,37 +1,93 @@
 import axios from "./axios";
 
+// ========== CONSTANTS ==========
 const ENABLE_LOGS = true;
+const API_BASE_URL = "/assigntask/generate";
+const API_TODAY_URL = "http://localhost:3005/api/assigntask/generate/today";
+const DATE_FORMAT_OPTIONS = { year: "numeric", month: "2-digit", day: "2-digit" };
 
-const log = (...msg) => ENABLE_LOGS && console.log(...msg);
+// ========== UTILITIES ==========
+const log = (...messages) => ENABLE_LOGS && console.log(...messages);
+const logError = (context, error) => console.error(`Error ${context}:`, error);
 
+const formatDate = (date) => {
+    return new Date(date).toLocaleDateString("en-CA", DATE_FORMAT_OPTIONS); // YYYY-MM-DD format
+};
+
+const getTodayDate = () => formatDate(new Date());
+
+const appendIfValid = (formData, key, value) => {
+    if (value != null && value !== "") {
+        formData.append(key, value);
+    }
+};
+
+const createFormData = (data) => {
+    const formData = new FormData();
+
+    Object.entries(data).forEach(([key, value]) => {
+        if (value != null && value !== "") {
+            formData.append(key, value);
+        }
+    });
+
+    return formData;
+};
+
+// ========== API HELPERS ==========
+const handleApiError = (operation, error) => {
+    logError(operation, error);
+    const message =
+        error?.message === "timeout of 120000ms exceeded"
+            ? "The server is taking too long to respond. Please try again or narrow the data range."
+            : error?.message || "Request failed";
+    throw new Error(message);
+};
+
+const apiRequest = async (method, url, data = null, config = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), (config.timeout || 120000) + 5000);
+
+    try {
+        const response = await axios({
+            method,
+            url,
+            data,
+            signal: controller.signal,
+            ...config,
+        });
+        return response.data;
+    } catch (error) {
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
+// ========== TASK API FUNCTIONS ==========
 export const getAllTasks = async () => {
     try {
-        const res = await axios.get('/assigntask/generate');
-        return res.data;
-    } catch (err) {
-        console.error("Error fetching tasks:", err);
-        throw err;
+        return await apiRequest("get", API_BASE_URL);
+    } catch (error) {
+        return handleApiError("fetching tasks", error);
+    }
+};
+
+export const getTodayTasks = async () => {
+    try {
+        return await apiRequest("get", API_TODAY_URL);
+    } catch (error) {
+        return handleApiError("fetching today's tasks", error);
     }
 };
 
 export const getPendingTasks = async () => {
     try {
-        const allTasks = await getAllTasks();
-        const today = formatDate(new Date());
-
-        const pending = allTasks.filter((task) => {
-            if (!task.task_start_date) return false;
-
-            const start = formatDate(new Date(task.task_start_date));
-            const submitted = !!task.submission_date;
-
-            return start === today && !submitted;
-        });
-
-        return pending;
-    } catch (err) {
-        console.error("Error fetching pending tasks:", err);
-        throw err;
+        const todayTasks = await getTodayTasks();
+        const pendingTasks = todayTasks.filter((task) => !task.submission_date);
+        return pendingTasks;
+    } catch (error) {
+        return handleApiError("fetching pending tasks", error);
     }
 };
 
@@ -39,113 +95,108 @@ export const getHistoryTasks = async () => {
     try {
         const allTasks = await getAllTasks();
 
-        const done = allTasks.filter(
-            (t) => t.task_start_date && t.submission_date
+        const completedTasks = allTasks.filter(
+            (task) => task.task_start_date && task.submission_date
         );
 
-        log("📜 History tasks:", done.length);
-        return done;
-    } catch (err) {
-        console.error("Error fetching history tasks:", err);
-        throw err;
+        // log("📜 History tasks:", completedTasks.length);
+        return completedTasks;
+    } catch (error) {
+        return handleApiError("fetching history tasks", error);
     }
 };
 
-// NEW API FUNCTION FOR USER CONFIRMATION
 export const confirmTask = async (taskId) => {
     try {
-        const form = new FormData();
-        form.append("attachment", "confirmed");
-        // Do NOT include submission_date for user confirmation
+        const formData = createFormData({
+            attachment: "confirmed",
+        });
 
-        const res = await axios.post(
-            `/assigntask/generate/${taskId}/confirm`,
-            form,
-            {
-                headers: { "Content-Type": "multipart/form-data" },
-            }
+        const config = {
+            headers: { "Content-Type": "multipart/form-data" },
+        };
+
+        return await apiRequest(
+            "post",
+            `${API_BASE_URL}/${taskId}/confirm`,
+            formData,
+            config
         );
-
-        return res.data;
-    } catch (err) {
-        console.error(`Failed confirming task ${taskId}:`, err);
-        throw err;
+    } catch (error) {
+        return handleApiError(`confirming task ${taskId}`, error);
     }
 };
 
 export const updateTask = async (taskId, updateData = {}) => {
     try {
-        const form = new FormData();
+        const formData = new FormData();
 
-        appendIfValid(form, "status", updateData.status);
-        appendIfValid(form, "remark", updateData.remark);
-        appendIfValid(form, "attachment", updateData.attachment);
+        // Append basic fields
+        appendIfValid(formData, "status", updateData.status);
+        appendIfValid(formData, "remark", updateData.remark);
+        appendIfValid(formData, "attachment", updateData.attachment);
 
+        // Handle submission date for completed tasks
         if (updateData.status === "Yes" || updateData.status === "Done") {
-            form.append("submission_date", new Date().toISOString());
+            formData.append("submission_date", new Date().toISOString());
         }
 
+        // Handle image upload
         if (updateData.image_file instanceof File) {
-            log("📸 Uploading new image:", updateData.image_file.name);
-            form.append("image", updateData.image_file);
+            // log("Uploading new image:", updateData.image_file.name);
+            formData.append("image", updateData.image_file);
         } else if (updateData.image_url) {
-            log("🔗 Using existing image URL");
-            form.append("image", updateData.image_url);
+            // log(" Using existing image URL");
+            formData.append("image", updateData.image_url);
         }
 
-        const res = await axios.patch(
-            `/assigntask/generate/${taskId}`,
-            form,
-            {
-                headers: { "Content-Type": "multipart/form-data" },
+        const config = {
+            headers: { "Content-Type": "multipart/form-data" },
+        };
 
-            }
+        return await apiRequest(
+            "patch",
+            `${API_BASE_URL}/${taskId}`,
+            formData,
+            config
         );
-
-        return res.data;
-    } catch (err) {
-        console.error(`Failed updating task ${taskId}:`, err);
-        throw err;
+    } catch (error) {
+        return handleApiError(`updating task ${taskId}`, error);
     }
 };
 
 export const submitTasks = async (tasks = []) => {
-    log(`📤 Submitting ${tasks.length} tasks...`);
+    // log(`Submitting ${tasks.length} tasks...`);
 
-    const updates = tasks.map(async (t) => {
+    const updatePromises = tasks.map((task) => {
         const payload = {
-            status: t.status || "Yes",
-            remark: t.remark || "",
-            attachment: t.attachment || "No",
+            status: task.status || "Yes",
+            remark: task.remark || "",
+            attachment: task.attachment || "No",
         };
 
-        if (t.status === "Yes") {
+        if (task.status === "Yes") {
             payload.submission_date = new Date().toISOString();
         }
 
-        if (t.image_file) payload.image_file = t.image_file;
-        else if (t.image_url) payload.image_url = t.image_url;
+        if (task.image_file) {
+            payload.image_file = task.image_file;
+        } else if (task.image_url) {
+            payload.image_url = task.image_url;
+        }
 
-        return updateTask(t.task_id, payload);
+        return updateTask(task.task_id, payload);
     });
 
-    const results = await Promise.allSettled(updates);
+    const results = await Promise.allSettled(updatePromises);
 
-    const successful = results.filter((r) => r.status === "fulfilled").map((s) => s.value);
-    const failed = results.filter((r) => r.status === "rejected").map((f) => f.reason);
+    const successful = results
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value);
+
+    const failed = results
+        .filter((result) => result.status === "rejected")
+        .map((result) => result.reason);
 
     return { successful, failed };
-};
-
-const appendIfValid = (form, key, value) => {
-    if (value !== undefined && value !== null && value !== "") {
-        form.append(key, value);
-    }
-};
-
-const formatDate = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
 };

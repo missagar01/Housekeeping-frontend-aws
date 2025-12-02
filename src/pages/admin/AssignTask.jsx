@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../components/layout/AdminLayout";
 import { pushAssignTask } from "../../Api/assignTaskApi";
 
-// Add this HOD mapping object after imports
 const departmentHODs = {
-  "Mandir": "Komal Sahu and Rinku Gautam",
+  Mandir: "Komal Sahu and Rinku Gautam",
   "Main Gate": "Komal Sahu and Rinku Gautam",
   "Main Gate Front Area": "Komal Sahu and Rinku Gautam",
   "Admin Office - Ground Floor": "Moradhwaj Verma and Shivraj Sharma",
@@ -24,19 +23,41 @@ const departmentHODs = {
   "CCM Office": "Rinku Singh",
   "CCM Panel Room": "Rinku Singh",
   "Store Office": "Pramod and Suraj",
-  "Workshop": "Dhanji Yadav",
+  Workshop: "Dhanji Yadav",
   "Car Parking Area": "Department HOD",
-  "default": "Department HOD"
+  default: "Department HOD",
 };
 
-export default function AssignTask() {
-  // Simple options
-  const allDepartments = ["Mandir", "Car Parking Area", "Main Gate", "Main Gate Front Area", "Admin Office - Ground Floor", "Cabins ग्राउंड फ्लोर: and first floor", "Admin Office - First Floor", "Weight Office & Kata In/Out", "New Lab", "Canteen Area 1 & 2", "Pipe Mill", "Patra Mill Foreman Office", "Patra Mill DC Panel Room", "Patra Mill AC Panel Room", "SMS Panel Room", "SMS Office", "CCM Office", "CCM Panel Room", "Store Office", "Workshop", "Labour Colony & Bathroom", "Plant Area"];
-  const givenBy = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
-  const doerNames = ["Housekeeping Staff", "Company Reja"];
-  const frequencies = ["one-time", "daily", "weekly", "monthly"];
+const allDepartments = [
+  "Mandir",
+  "Car Parking Area",
+  "Main Gate",
+  "Main Gate Front Area",
+  "Admin Office - Ground Floor",
+  "Cabins ग्राउंड फ्लोर: and first floor",
+  "Admin Office - First Floor",
+  "Weight Office & Kata In/Out",
+  "New Lab",
+  "Canteen Area 1 & 2",
+  "Pipe Mill",
+  "Patra Mill Foreman Office",
+  "Patra Mill DC Panel Room",
+  "Patra Mill AC Panel Room",
+  "SMS Panel Room",
+  "SMS Office",
+  "CCM Office",
+  "CCM Panel Room",
+  "Store Office",
+  "Workshop",
+  "Labour Colony & Bathroom",
+  "Plant Area",
+];
 
-  // Form state
+const givenByOptions = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
+const doerNames = ["Housekeeping Staff", "Company Reja"];
+const frequencies = ["one-time", "daily", "weekly", "monthly"];
+
+export default function AssignTask() {
   const [formData, setFormData] = useState({
     department: "",
     given_by: "",
@@ -44,81 +65,89 @@ export default function AssignTask() {
     task_description: "",
     frequency: "",
     task_start_date: "",
-    hod: ""
+    hod: "",
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userRole, setUserRole] = useState("")
-  const [userDepartment, setUserDepartment] = useState("")
+  const [userRole, setUserRole] = useState("");
+  const [userDepartment, setUserDepartment] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || ""
-    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || ""
-    setUserRole(role)
-    setUserDepartment(department)
+    const role = sessionStorage.getItem("role") || localStorage.getItem("role") || "";
+    const department = sessionStorage.getItem("department") || localStorage.getItem("department") || "";
+    setUserRole(role);
+    setUserDepartment(department);
 
-    // Auto-set department and HOD for users
-    if (role.toLowerCase() === 'user' && department) {
-      setFormData(prev => ({
+    if (role.toLowerCase() === "user" && department) {
+      setFormData((prev) => ({
         ...prev,
-        department: department,
-        hod: departmentHODs[department] || departmentHODs.default
-      }))
+        department,
+        hod: departmentHODs[department] || departmentHODs.default,
+      }));
     }
-  }, [])
+  }, []);
 
-  const departments = userRole && userRole.toLowerCase() === 'user' && userDepartment
-    ? allDepartments.filter(dept => dept === userDepartment)
-    : allDepartments;
+  const departments = useMemo(() => {
+    if (userRole.toLowerCase() === "user" && userDepartment) {
+      return allDepartments.filter((dept) => dept === userDepartment);
+    }
+    return allDepartments;
+  }, [userDepartment, userRole]);
+
+  const updateHod = (dept) => departmentHODs[dept] || departmentHODs.default;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     setFormData((prev) => {
-      const updatedData = { ...prev, [name]: value };
-
-      // Auto-populate HOD when department is selected (only for admin)
-      if (name === "department" && value && userRole.toLowerCase() !== 'user') {
-        updatedData.hod = departmentHODs[value] || departmentHODs.default;
+      const next = { ...prev, [name]: value };
+      if (name === "department" && value && userRole.toLowerCase() !== "user") {
+        next.hod = updateHod(value);
       }
-
-      return updatedData;
+      return next;
     });
+  };
+
+  const validate = () => {
+    if (!formData.department) return "Department is required";
+    if (!formData.task_description.trim()) return "Task description is required";
+    if (!formData.frequency) return "Frequency is required";
+    if (!formData.task_start_date) return "Start date is required";
+    return "";
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
 
-    // Basic validation
-    if (!formData.department || !formData.task_description) {
-      alert('Please fill in required fields');
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     setIsSubmitting(true);
-
     try {
-      const result = await pushAssignTask(formData);
-      alert("Task submitted successfully!");
-
-      // Reset form
+      await pushAssignTask({
+        ...formData,
+        task_description: formData.task_description.trim(),
+      });
+      setSuccess("Task submitted successfully.");
       setFormData({
-        department: userRole.toLowerCase() === 'user' ? userDepartment : "",
+        department: userRole.toLowerCase() === "user" ? userDepartment : "",
         given_by: "",
         name: "",
         task_description: "",
         frequency: "",
         task_start_date: "",
-        hod: userRole.toLowerCase() === 'user' ? (departmentHODs[userDepartment] || departmentHODs.default) : ""
+        hod: userRole.toLowerCase() === "user" ? updateHod(userDepartment) : "",
       });
-
-    } catch (error) {
-      console.error("Error in handleSubmit:", error);
-
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        alert("Task is being processed (backend is taking time). Please check the database to confirm it was saved.");
+    } catch (err) {
+      if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+        setError("Task is being processed. Please verify in a moment.");
       } else {
-        alert("Failed to submit task: " + error.message);
+        setError(err?.message || "Failed to submit task");
       }
     } finally {
       setIsSubmitting(false);
@@ -127,140 +156,161 @@ export default function AssignTask() {
 
   return (
     <AdminLayout>
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-xl font-bold tracking-tight mb-6 text-gray-500">
-          Assign Task
-        </h1>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Department */}
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium mb-1">Department</label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                disabled={userRole && userRole.toLowerCase() === 'user' && userDepartment}
-              >
-                <option value="">Select</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Housekeeping</p>
+              <h1 className="text-xl font-semibold text-gray-800">Assign Task</h1>
+            </div>
+            {isSubmitting ? (
+              <span className="inline-flex items-center gap-2 text-sm text-blue-700">
+                <span className="h-2.5 w-2.5 rounded-full border-2 border-blue-700 border-t-transparent animate-spin" />
+                Submitting...
+              </span>
+            ) : null}
+          </div>
+
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+            {error ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+            {success ? (
+              <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {success}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Department</label>
+                <select
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  disabled={userRole.toLowerCase() === "user" && !!userDepartment}
+                  required
+                >
+                  <option value="">Select department</option>
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Department HOD</label>
+                <input
+                  name="hod"
+                  value={formData.hod}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                  disabled
+                  placeholder="Auto populated"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Given By</label>
+                <select
+                  name="given_by"
+                  value={formData.given_by}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select</option>
+                  {givenByOptions.map((person) => (
+                    <option key={person} value={person}>
+                      {person}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Doer Name</label>
+                <select
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select</option>
+                  {doerNames.map((doer) => (
+                    <option key={doer} value={doer}>
+                      {doer}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Given By */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Given By</label>
-              <select
-                name="given_by"
-                value={formData.given_by}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              >
-                <option value="">Select</option>
-                {givenBy.map(person => (
-                  <option key={person} value={person}>{person}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Department HOD - Dynamic based on department selection */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Department HOD</label>
-              <select
-                name="hod"
-                value={formData.hod}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                disabled={userRole && userRole.toLowerCase() === 'user' && userDepartment}
-              >
-                <option value="">Select</option>
-                {/* If user role, auto-select their department's HOD */}
-                {userRole && userRole.toLowerCase() === 'user' && userDepartment ? (
-                  <option value={departmentHODs[userDepartment] || departmentHODs.default}>
-                    {departmentHODs[userDepartment] || departmentHODs.default}
-                  </option>
-                ) : (
-                  /* If admin role, show HOD based on selected department */
-                  <option value={departmentHODs[formData.department] || departmentHODs.default}>
-                    {departmentHODs[formData.department] || departmentHODs.default}
-                  </option>
-                )}
-              </select>
-            </div>
-
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Doer Name</label>
-              <select
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              >
-                <option value="">Select</option>
-                {doerNames.map(doer => (
-                  <option key={doer} value={doer}>{doer}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Task Description</label>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Task Description</label>
               <textarea
                 name="task_description"
                 value={formData.task_description}
                 onChange={handleChange}
-                rows="3"
-                className="w-full border border-gray-300 rounded px-3 py-2"
-                placeholder="Enter task description"
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Describe the task clearly"
+                required
               />
             </div>
 
-            {/* Frequency */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Frequency</label>
-              <select
-                name="frequency"
-                value={formData.frequency}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              >
-                <option value="">Select</option>
-                {frequencies.map(freq => (
-                  <option key={freq} value={freq}>{freq}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Frequency</label>
+                <select
+                  name="frequency"
+                  value={formData.frequency}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Select</option>
+                  {frequencies.map((freq) => (
+                    <option key={freq} value={freq}>
+                      {freq}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700">Start Date</label>
+                <input
+                  type="date"
+                  name="task_start_date"
+                  value={formData.task_start_date}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Date */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Start Date</label>
-              <input
-                type="date"
-                name="task_start_date"
-                value={formData.task_start_date}
-                onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <div className="pt-4">
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? "Submitting..." : "Submit Task"}
+                {isSubmitting ? (
+                  <>
+                    <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Task"
+                )}
               </button>
             </div>
-
           </form>
         </div>
       </div>
