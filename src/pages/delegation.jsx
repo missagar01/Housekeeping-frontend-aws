@@ -37,6 +37,8 @@ function AccountDataPage() {
   const [userRole, setUserRole] = useState("")
   const [userDepartment, setUserDepartment] = useState("")
   const [confirmingTask, setConfirmingTask] = useState(null)
+  const [userConfirmRemarks, setUserConfirmRemarks] = useState({})
+  const [submitMessage, setSubmitMessage] = useState({ type: "", text: "" })
 
   const tableContainerRef = useRef(null)
 
@@ -83,31 +85,6 @@ function AccountDataPage() {
     loadData()
   }, [loadData])
 
-  // Format date for display
-  const formatDateTimeForDisplay = useCallback((dateString) => {
-    if (!dateString) return "—"
-    try {
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) return dateString
-
-      const day = date.getDate().toString().padStart(2, "0")
-      const month = (date.getMonth() + 1).toString().padStart(2, "0")
-      const year = date.getFullYear()
-      const hours = date.getHours().toString().padStart(2, "0")
-      const minutes = date.getMinutes().toString().padStart(2, "0")
-      const seconds = date.getSeconds().toString().padStart(2, "0")
-
-      return (
-        <div>
-          <div className="font-medium break-words">{`${day}/${month}/${year}`}</div>
-          <div className="text-xs text-gray-500 break-words">{`${hours}:${minutes}:${seconds}`}</div>
-        </div>
-      )
-    } catch {
-      return dateString
-    }
-  }, [])
-
   const resetFilters = useCallback(() => {
     setSearchTerm("")
     setSelectedMembers([])
@@ -120,8 +97,18 @@ function AccountDataPage() {
   const handleConfirmTask = async (taskId) => {
     setConfirmingTask(taskId)
     try {
-      await confirmTask(taskId)
+      const remarkToSend = (userConfirmRemarks[taskId] || "").trim()
+      if (!remarkToSend) {
+        setConfirmingTask(null)
+        return
+      }
+      await confirmTask(taskId, remarkToSend)
       setSuccessMessage("Task confirmed successfully!")
+      setUserConfirmRemarks(prev => {
+        const next = { ...prev }
+        delete next[taskId]
+        return next
+      })
       // Reload data to reflect changes
       await loadData()
     } catch (error) {
@@ -131,6 +118,35 @@ function AccountDataPage() {
       setConfirmingTask(null)
     }
   }
+
+  const renderDateTimeRaw = useCallback((value) => {
+    if (!value) return "—"
+
+    const formatTimeTo12h = (timeStr) => {
+      if (!timeStr) return ""
+      const clean = timeStr.replace("Z", "")
+      const [hRaw, mRaw = "00", sRaw = "00"] = clean.split(":")
+      const hoursNum = Number(hRaw)
+      if (Number.isNaN(hoursNum)) return clean
+      const period = hoursNum >= 12 ? "PM" : "AM"
+      const twelveHour = hoursNum % 12 === 0 ? 12 : hoursNum % 12
+      const seconds = sRaw.includes(".") ? sRaw.split(".")[0] : sRaw
+      const showSeconds = seconds && seconds !== "00"
+      const formatted = `${String(twelveHour).padStart(2, "0")}:${mRaw.padStart(2, "0")}${showSeconds ? `:${seconds.padStart(2, "0")}` : ""} ${period}`
+      return formatted
+    }
+
+    if (typeof value === "string" && value.includes("T")) {
+      const [datePart, timePart = ""] = value.split("T")
+      return (
+        <div className="leading-tight break-words">
+          <div className="font-medium">{datePart}</div>
+          <div className="text-xs text-gray-500">{formatTimeTo12h(timePart)}</div>
+        </div>
+      )
+    }
+    return value
+  }, [])
 
   const filteredPendingTasks = useMemo(() => {
     const normalizedSelectedDept = selectedDepartment?.toLowerCase().trim() || "";
@@ -151,12 +167,6 @@ function AccountDataPage() {
         : true
 
       return matchesSearch && matchesMember && matchesDepartment
-    }).sort((a, b) => {
-      const dateA = new Date(a.task_start_date || "")
-      const dateB = new Date(b.task_start_date || "")
-      if (!dateA || isNaN(dateA.getTime())) return 1
-      if (!dateB || isNaN(dateB.getTime())) return -1
-      return dateA.getTime() - dateB.getTime()
     })
   }, [pendingTasks, searchTerm, selectedMembers, selectedDepartment])
 
@@ -200,11 +210,7 @@ function AccountDataPage() {
 
         return matchesSearch && matchesMember && matchesDepartment && matchesDateRange
       })
-      .sort((a, b) => {
-        const dateA = a.submission_date ? new Date(a.submission_date) : new Date(0)
-        const dateB = b.submission_date ? new Date(b.submission_date) : new Date(0)
-        return dateB.getTime() - dateA.getTime()
-      })
+      
   }, [historyTasks, searchTerm, selectedMembers, selectedDepartment, startDate, endDate])
 
   const getDepartmentsList = useMemo(() => {
@@ -291,21 +297,11 @@ function AccountDataPage() {
   const handleSubmit = async () => {
     const selectedItemsArray = Array.from(selectedItems);
     if (selectedItemsArray.length === 0) {
-      alert("Please select at least one item to submit");
+      setSubmitMessage({ type: "error", text: "Please select at least one item to submit." })
       return;
     }
 
-    const hasEmptyRemarks = selectedItemsArray.some(id => {
-      const status = additionalData[id];
-      const remarks = remarksData[id];
-      return status === "No" && (!remarks || remarks.trim() === "");
-    });
-
-    if (hasEmptyRemarks) {
-      alert("Remarks are mandatory when status is 'No'. ");
-      return;
-    }
-
+    setSubmitMessage({ type: "info", text: "Submitting, please wait..." })
     setIsSubmitting(true);
 
     try {
@@ -326,10 +322,11 @@ function AccountDataPage() {
       const result = await submitTasks(selectedData);
 
       if (result.failed.length > 0) {
-        alert(`${result.failed.length} submissions failed. Check console for details.`);
+        setSubmitMessage({ type: "error", text: `${result.failed.length} submissions failed. Check console for details.` })
         console.error('Failed submissions:', result.failed);
       } else {
         setSuccessMessage(`Successfully submitted ${selectedItemsArray.length} tasks with images!`);
+        setSubmitMessage({ type: "", text: "" })
       }
 
       await loadData();
@@ -340,7 +337,7 @@ function AccountDataPage() {
 
     } catch (error) {
       console.error('Submission error:', error);
-      alert('Submission failed: ' + error.message);
+      setSubmitMessage({ type: "error", text: 'Submission failed: ' + error.message })
     } finally {
       setIsSubmitting(false);
     }
@@ -356,6 +353,15 @@ function AccountDataPage() {
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-700">
             {showHistory ? CONFIG.PAGE_CONFIG.historyTitle : CONFIG.PAGE_CONFIG.title}
           </h1>
+
+          {submitMessage.text ? (
+            <div className={`rounded-md px-3 py-2 text-sm sm:text-base ${submitMessage.type === "error"
+              ? "bg-red-50 border border-red-200 text-red-700"
+              : "bg-blue-50 border border-blue-200 text-blue-700"
+              }`}>
+              {submitMessage.text}
+            </div>
+          ) : null}
 
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
             <div className="relative flex-1">
@@ -393,9 +399,12 @@ function AccountDataPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={selectedItemsCount === 0 || isSubmitting}
-                  className="flex-1 sm:flex-none rounded-md gradient-bg py-2 px-3 sm:px-4 text-white hover:from-gray-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                  className="flex-1 sm:flex-none rounded-md gradient-bg py-2 px-3 sm:px-4 text-white hover:from-gray-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base inline-flex items-center justify-center gap-2"
                 >
-                  {isSubmitting ? "Processing..." : `Submit (${selectedItemsCount})`}
+                  {isSubmitting && (
+                    <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                  {isSubmitting ? "Submitting..." : `Submit (${selectedItemsCount})`}
                 </button>
               )}
             </div>
@@ -528,7 +537,7 @@ function AccountDataPage() {
                           </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
                             <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {formatDateTimeForDisplay(history.task_start_date)}
+                              {renderDateTimeRaw(history.task_start_date)}
                             </div>
                           </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4">
@@ -545,7 +554,7 @@ function AccountDataPage() {
                           </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
                             <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {formatDateTimeForDisplay(history.submission_date)}
+                              {renderDateTimeRaw(history.submission_date)}
                             </div>
                           </td>
                           <td className="px-2 sm:px-3 py-2 sm:py-4 bg-blue-50">
@@ -661,6 +670,9 @@ function AccountDataPage() {
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                             COnfirm By HOD
                           </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Remark
+                          </th>
                         </>
                       ) : (
                         /* ADMIN VIEW - FULL COLUMNS */
@@ -712,6 +724,7 @@ function AccountDataPage() {
                       filteredPendingTasks.map((task, index) => {
                         const isSelected = selectedItems.has(task.task_id)
                         const sequenceNumber = index + 1
+                        const userRemarkTrimmed = (userConfirmRemarks[task.task_id] || "").trim()
 
                         return (
                           <tr key={task.task_id} className={`${isSelected ? "bg-gray-50" : ""} hover:bg-gray-50`}>
@@ -721,7 +734,7 @@ function AccountDataPage() {
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
                                   <button
                                     onClick={() => handleConfirmTask(task.task_id)}
-                                    disabled={confirmingTask === task.task_id || task.attachment === "confirmed"}
+                                    disabled={confirmingTask === task.task_id || task.attachment === "confirmed" || !userRemarkTrimmed}
                                     className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${task.attachment === "confirmed"
                                       ? "bg-gray-100 text-gray-600 cursor-not-allowed"
                                       : "bg-green-600 text-white hover:bg-green-700"
@@ -745,7 +758,7 @@ function AccountDataPage() {
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words">
-                                    {formatDateTimeForDisplay(task.task_start_date)}
+                                    {renderDateTimeRaw(task.task_start_date)}
                                   </div>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
@@ -759,6 +772,16 @@ function AccountDataPage() {
                                       task.attachment || "Pending"
                                     )}
                                   </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <input
+                                    type="text"
+                                    placeholder="Enter remark"
+                                    value={userConfirmRemarks[task.task_id] || ""}
+                                    onChange={(e) => setUserConfirmRemarks(prev => ({ ...prev, [task.task_id]: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
+                                    disabled={task.attachment === "confirmed"}
+                                  />
                                 </td>
                               </>
                             ) : (
@@ -792,7 +815,7 @@ function AccountDataPage() {
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words">
-                                    {formatDateTimeForDisplay(task.task_start_date)}
+                                    {renderDateTimeRaw(task.task_start_date)}
                                   </div>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
@@ -829,21 +852,9 @@ function AccountDataPage() {
                                   </select>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-orange-50 min-w-[120px]">
-                                  <input
-                                    type="text"
-                                    placeholder={
-                                      additionalData[task.task_id] === "No"
-                                        ? "Remarks required*"
-                                        : "Enter remarks"
-                                    }
-                                    disabled={!isSelected || !additionalData[task.task_id] || task.attachment !== "confirmed"}
-                                    value={remarksData[task.task_id] || ""}
-                                    onChange={(e) => setRemarksData(prev => ({ ...prev, [task.task_id]: e.target.value }))}
-                                    className={`border rounded-md px-2 py-1 w-full border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed text-xs sm:text-sm break-words ${additionalData[task.task_id] === "No" && (!remarksData[task.task_id] || remarksData[task.task_id].trim() === "")
-                                      ? "border-red-500 bg-red-50"
-                                      : ""
-                                      }`}
-                                  />
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words" title={task.remark}>
+                                    {task.remark || "—"}
+                                  </div>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
                                   {uploadedImages[task.task_id] || task.image ? (
@@ -901,7 +912,7 @@ function AccountDataPage() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={isUser ? 6 : 13} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
+                        <td colSpan={isUser ? 7 : 12} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
                           {searchTerm || selectedMembers.length > 0
                             ? "No tasks matching your search"
                             : "No pending tasks found"}

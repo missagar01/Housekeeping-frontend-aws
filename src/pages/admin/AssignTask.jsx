@@ -56,6 +56,7 @@ const allDepartments = [
 
 const givenByOptions = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
 const doerNames = ["Housekeeping Staff", "Company Reja"];
+const doerNames2 = ["Shudhasu Behra", "Tikeshwar Chakradhari(Hk)", "Makhan Lal"];
 const frequencies = ["one-time", "daily", "weekly", "monthly"];
 
 export default function AssignTask() {
@@ -64,6 +65,7 @@ export default function AssignTask() {
     department: "",
     given_by: "",
     name: "",
+    doer_name2: "",
     task_description: "",
     frequency: "",
     task_start_date: "",
@@ -140,6 +142,7 @@ export default function AssignTask() {
         department: userRole.toLowerCase() === "user" ? userDepartment : "",
         given_by: "",
         name: "",
+        doer_name2: "",
         task_description: "",
         frequency: "",
         task_start_date: "",
@@ -244,6 +247,23 @@ export default function AssignTask() {
                 >
                   <option value="">Select</option>
                   {doerNames.map((doer) => (
+                    <option key={doer} value={doer}>
+                      {doer}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Doer Name 2</label>
+                <select
+                  name="doer_name2"
+                  value={formData.doer_name2}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select</option>
+                  {doerNames2.map((doer) => (
                     <option key={doer} value={doer}>
                       {doer}
                     </option>

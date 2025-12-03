@@ -82,10 +82,11 @@ export const getHistoryTasks = async (filters = {}) => {
     }
 };
 
-export const confirmTask = async (taskId) => {
+export const confirmTask = async (taskId, remark = "") => {
     try {
         const formData = createFormData({
             attachment: "confirmed",
+            remark,
         });
 
         const config = {

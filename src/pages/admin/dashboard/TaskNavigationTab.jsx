@@ -14,7 +14,8 @@ export default function TaskNavigationTabs({
   getFrequencyColor,
   dashboardStaffFilter,
   departmentFilter
-}) {
+}) 
+{
   const [currentPage, setCurrentPage] = useState(1)
   const [displayedTasks, setDisplayedTasks] = useState([])
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -36,90 +37,6 @@ export default function TaskNavigationTabs({
     setTotalCount(0)
   }, [taskView, dashboardType, dashboardStaffFilter, departmentFilter])
 
-  // Helper function to format date in Indian format (DD/MM/YYYY)
-  const formatDateToIndianFormat = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date)) return ""
-    const day = date.getDate().toString().padStart(2, "0")
-    const month = (date.getMonth() + 1).toString().padStart(2, "0")
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
-  // Helper function to format datetime in Indian format (DD/MM/YYYY HH:MM:SS)
-  const formatDateTimeToIndianFormat = (date) => {
-    if (!date || !(date instanceof Date) || isNaN(date)) return ""
-    const day = date.getDate().toString().padStart(2, "0")
-    const month = (date.getMonth() + 1).toString().padStart(2, "0")
-    const year = date.getFullYear()
-    const hours = date.getHours().toString().padStart(2, "0")
-    const minutes = date.getMinutes().toString().padStart(2, "0")
-    const seconds = date.getSeconds().toString().padStart(2, "0")
-    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
-  }
-
-  // Helper function to check if date is today
-  const isToday = (date) => {
-    if (!date) return false;
-    const today = new Date();
-    const checkDate = new Date(date);
-
-    if (isNaN(checkDate.getTime())) return false;
-
-    return (
-      checkDate.getDate() === today.getDate() &&
-      checkDate.getMonth() === today.getMonth() &&
-      checkDate.getFullYear() === today.getFullYear()
-    );
-  };
-
-  // Function to parse various date formats and convert to Indian format
-  const parseAndFormatDate = (dateStr) => {
-    if (!dateStr || typeof dateStr !== "string") return ""
-
-    let date;
-
-    // Handle YYYY-MM-DD format
-    if (dateStr.includes("-") && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-      date = new Date(dateStr)
-    }
-    // Handle DD/MM/YYYY format (already Indian format)
-    else if (dateStr.includes("/")) {
-      const parts = dateStr.split(" ")
-      const datePart = parts[0]
-      const dateComponents = datePart.split("/")
-
-      if (dateComponents.length === 3) {
-        const [day, month, year] = dateComponents.map(Number)
-        if (day && month && year) {
-          date = new Date(year, month - 1, day)
-
-          // If time part exists, add it
-          if (parts.length > 1) {
-            const timePart = parts[1]
-            const timeComponents = timePart.split(":")
-            if (timeComponents.length >= 2) {
-              const [hours, minutes, seconds] = timeComponents.map(Number)
-              date.setHours(hours || 0, minutes || 0, seconds || 0)
-            }
-          }
-        }
-      }
-    }
-    // Handle other date formats
-    else {
-      date = new Date(dateStr)
-    }
-
-    // If date is invalid, return original string
-    if (!date || isNaN(date.getTime())) {
-      return dateStr
-    }
-
-    // Return in Indian format with time if available
-    const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0
-    return hasTime ? formatDateTimeToIndianFormat(date) : formatDateToIndianFormat(date)
-  }
-
   // Function to get task status based on submission_date
   const getTaskStatus = (submissionDate, status) => {
     if (submissionDate || status === 'Yes') {
@@ -138,33 +55,10 @@ export default function TaskNavigationTabs({
         taskApi.getNotDoneTasks()
       ]);
 
-      // Filter recent tasks for today only
-      const todayRecentTasks = recentData.filter(task =>
-        isToday(task.task_start_date)
-      );
-
-      // Filter overdue tasks: task_start_date < today AND submission_date is null
-      const filteredOverdueTasks = overdueData.filter(task => {
-        const taskStartDate = parseTaskStartDate(task.task_start_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        if (taskStartDate) {
-          const taskDate = new Date(taskStartDate);
-          taskDate.setHours(0, 0, 0, 0);
-
-          const isTaskDateBeforeToday = taskDate < today;
-          const isSubmissionNull = !task.submission_date || task.submission_date === null || task.submission_date === '';
-
-          return isTaskDateBeforeToday && isSubmissionNull;
-        }
-        return false;
-      });
-
       setTaskCounts({
-        recent: todayRecentTasks.length,
+        recent: recentData.length,
         upcoming: notDoneData.length,
-        overdue: filteredOverdueTasks.length
+        overdue: overdueData.length
       });
 
     } catch (error) {
@@ -207,24 +101,22 @@ export default function TaskNavigationTabs({
 
       // Process the data
       const processedTasks = apiData.map((task) => {
-        const taskStartDate = parseTaskStartDate(task.task_start_date)
-        const completionDate = task.submission_date ? parseTaskStartDate(task.submission_date) : null
+        const taskStartDate = task.task_start_date
+        const completionDate = task.submission_date
 
         let status = "pending"
         if (completionDate || task.status === 'Yes') {
           status = "completed"
-        } else if (taskStartDate && isDateInPast(taskStartDate)) {
-          status = "overdue"
         }
 
         return {
           id: task.task_id,
           title: task.task_description,
           assignedTo: task.name || "Unassigned",
-          taskStartDate: parseAndFormatDate(task.task_start_date),
+          taskStartDate: task.task_start_date, // show raw backend value
           originalTaskStartDate: task.task_start_date,
           status: getTaskStatus(task.submission_date, task.status), // Add status field
-          submissionDate: task.submission_date ? parseAndFormatDate(task.submission_date) : null,
+          submissionDate: task.submission_date || null,
           frequency: task.frequency || "one-time",
           rating: task.color_code_for || 0,
           department: task.department || "N/A",
@@ -250,33 +142,6 @@ export default function TaskNavigationTabs({
           if (!matchesSearch) return false;
         }
 
-        // For Recent tab, filter only today's tasks
-        if (taskView === "recent") {
-          if (!isToday(task.rawTaskStartDate)) return false;
-        }
-
-        // For Overdue tab, filter tasks where task_start_date < today AND submission_date is null
-        if (taskView === "overdue") {
-          const taskStartDate = parseTaskStartDate(task.rawTaskStartDate);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          // Check if task_start_date is before today AND submission_date is null
-          if (taskStartDate) {
-            const taskDate = new Date(taskStartDate);
-            taskDate.setHours(0, 0, 0, 0);
-
-            const isTaskDateBeforeToday = taskDate < today;
-            const isSubmissionNull = !task.rawSubmissionDate || task.rawSubmissionDate === null || task.rawSubmissionDate === '';
-
-            if (!(isTaskDateBeforeToday && isSubmissionNull)) {
-              return false;
-            }
-          } else {
-            return false; // Skip tasks with invalid start dates
-          }
-        }
-
         return true;
       })
 
@@ -296,49 +161,6 @@ export default function TaskNavigationTabs({
       setIsLoadingMore(false)
     }
   }, [taskView, searchQuery, isLoadingMore])
-
-  // Helper functions
-  const parseTaskStartDate = (dateStr) => {
-    if (!dateStr || typeof dateStr !== "string") return null
-
-    if (dateStr.includes("-") && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-      const parsed = new Date(dateStr)
-      return isNaN(parsed) ? null : parsed
-    }
-
-    if (dateStr.includes("/")) {
-      const parts = dateStr.split(" ")
-      const datePart = parts[0]
-      const dateComponents = datePart.split("/")
-      if (dateComponents.length !== 3) return null
-
-      const [day, month, year] = dateComponents.map(Number)
-      if (!day || !month || !year) return null
-
-      const date = new Date(year, month - 1, day)
-      if (parts.length > 1) {
-        const timePart = parts[1]
-        const timeComponents = timePart.split(":")
-        if (timeComponents.length >= 2) {
-          const [hours, minutes, seconds] = timeComponents.map(Number)
-          date.setHours(hours || 0, minutes || 0, seconds || 0)
-        }
-      }
-      return isNaN(date) ? null : date
-    }
-
-    const parsed = new Date(dateStr)
-    return isNaN(parsed) ? null : parsed
-  }
-
-  const isDateInPast = (date) => {
-    if (!date || !(date instanceof Date)) return false
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const checkDate = new Date(date)
-    checkDate.setHours(0, 0, 0, 0)
-    return checkDate < today
-  }
 
   // Initial load when component mounts or key dependencies change
   useEffect(() => {
