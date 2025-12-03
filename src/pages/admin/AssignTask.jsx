@@ -56,7 +56,7 @@ const allDepartments = [
 
 const givenByOptions = ["AAKASH AGRAWAL", "SHEELESH MARELE", "AJIT KUMAR GUPTA"];
 const doerNames = ["Housekeeping Staff", "Company Reja"];
-const doerNames2 = ["Shudhasu Behra", "Tikeshwar Chakradhari(Hk)", "Makhan Lal"];
+const doerNames2 = ["Sarad Behra", "Tikeshwar Chakradhari(Hk)", "Makhan Lal"];
 const frequencies = ["one-time", "daily", "weekly", "monthly"];
 
 export default function AssignTask() {
@@ -105,7 +105,7 @@ export default function AssignTask() {
     const { name, value } = e.target;
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === "department" && value && userRole.toLowerCase() !== "user") {
+      if (name === "department" && value) {
         next.hod = updateHod(value);
       }
       return next;

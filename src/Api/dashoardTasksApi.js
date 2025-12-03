@@ -9,19 +9,25 @@ const safeGet = async (endpoint, params = {}) => {
 
 export const taskApi = {
   // Explicit today endpoint for dashboard "Recent/Today" tab
-  getTodayTasks: () => safeGet("/assigntask/generate/today"),
+  getTodayTasks: () =>
+    safeGet("/assigntask/generate/today", {
+      limit: 100,
+      page: 1,
+    }),
 
   // Scope to today's window to reduce payload; kept for compatibility
   getRecentTasks: () => taskApi.getTodayTasks(),
   getOverdueTasks: () =>
     safeGet("/assigntask/generate/overdue", {
       end_date: todayISO(),
-      limit: 500,
+      limit: 100,
+      page: 1,
     }),
   getNotDoneTasks: () =>
     safeGet("/assigntask/generate/not-done", {
       start_date: todayISO(),
-      limit: 500,
+      limit: 100,
+      page: 1,
     }),
 
   getTasksWithFilters: (taskType, page = 1, limit = 50, filters = {}) => {

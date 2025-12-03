@@ -652,7 +652,7 @@ function AccountDataPage() {
                       {/* USER VIEW - SIMPLIFIED COLUMNS */}
                       {isUser ? (
                         <>
-                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap sticky left-0 z-30 bg-white">
                             Action
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -731,7 +731,7 @@ function AccountDataPage() {
                             {isUser ? (
                               /* USER VIEW ROW */
                               <>
-                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                <td className="px-2 sm:px-3 py-2 sm:py-4 sticky left-0 z-20 bg-white">
                                   <button
                                     onClick={() => handleConfirmTask(task.task_id)}
                                     disabled={confirmingTask === task.task_id || task.attachment === "confirmed" || !userRemarkTrimmed}

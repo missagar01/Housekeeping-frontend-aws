@@ -27,11 +27,18 @@ export const authAPI = {
       throw new Error(msg);
     }
   },
-  getUserProfile: async (userId) => {
+  getUserProfile: async (userId, token) => {
     try {
-      const response = await api.get(`/users/${userId}`);
+      const response = await api.get(`/users/${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data;
     } catch (error) {
+      // If unauthorized/forbidden, return null so caller can continue login
+      const status = error.response?.status;
+      if (status === 401 || status === 403) {
+        return null;
+      }
       throw new Error(error.response?.data?.message || "Failed to fetch user profile");
     }
   },

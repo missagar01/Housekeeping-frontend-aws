@@ -22,15 +22,26 @@ const resolveApiBase = () => {
 export const API_BASE_URL = resolveApiBase();
 const REQUEST_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT_MS || 120000);
 
+const getStoredToken = () => {
+  return (
+    sessionStorage.getItem("token") ||
+    localStorage.getItem("token") ||
+    (import.meta.env.VITE_API_BEARER_TOKEN || "").trim()
+  );
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    ...(getStoredToken() ? { Authorization: `Bearer ${getStoredToken()}` } : {}),
+  },
   timeout: REQUEST_TIMEOUT,
 });
 
 api.interceptors.request.use(
   (config) => {
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

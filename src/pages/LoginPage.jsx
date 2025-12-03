@@ -40,9 +40,11 @@ const LoginPage = () => {
         // GET USER DEPARTMENT FROM PROFILE API
         let userDepartment = "";
         try {
-          const userProfile = await authAPI.getUserProfile(user.id);
-          userDepartment = userProfile.department || userProfile.user_department || "";
-          // console.log("User Profile:", userProfile);
+          const userProfile = await authAPI.getUserProfile(user.id, token);
+          if (userProfile) {
+            userDepartment = userProfile.department || userProfile.user_department || "";
+            // console.log("User Profile:", userProfile);
+          }
         } catch (profileError) {
           console.warn("Could not fetch user profile:", profileError);
         }
