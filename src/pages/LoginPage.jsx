@@ -46,7 +46,6 @@ const LoginPage = () => {
             // console.log("User Profile:", userProfile);
           }
         } catch (profileError) {
-          console.warn("Could not fetch user profile:", profileError);
         }
 
         // Store user data centrally

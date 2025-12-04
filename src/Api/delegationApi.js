@@ -82,12 +82,17 @@ export const getHistoryTasks = async (filters = {}) => {
     }
 };
 
-export const confirmTask = async (taskId, remark = "") => {
+export const confirmTask = async (taskId, remark = "", imageFile = null, doerName2 = "") => {
     try {
-        const formData = createFormData({
-            attachment: "confirmed",
-            remark,
-        });
+        const formData = new FormData();
+
+        appendIfValid(formData, "attachment", "confirmed");
+        appendIfValid(formData, "remark", remark);
+        appendIfValid(formData, "doer_name2", doerName2);
+
+        if (imageFile instanceof File || typeof imageFile === "string") {
+            formData.append("image", imageFile);
+        }
 
         const config = {
             headers: { "Content-Type": "multipart/form-data" },
@@ -113,6 +118,7 @@ export const updateTask = async (taskId, updateData = {}) => {
         appendIfValid(formData, "remark", updateData.remark);
         appendIfValid(formData, "attachment", updateData.attachment);
         appendIfValid(formData, "name", updateData.name);
+        appendIfValid(formData, "doer_name2", updateData.doer_name2);
 
         // Handle submission date for completed tasks
         if (updateData.status === "Yes" || updateData.status === "Done") {

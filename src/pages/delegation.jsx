@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { CheckCircle2, Upload, X, Search, History, ArrowLeft } from "lucide-react"
 import AdminLayout from "../components/layout/AdminLayout"
 import { getPendingTasks, getHistoryTasks, submitTasks, confirmTask } from "../Api/delegationApi"
+import { API_BASE_URL } from "../Api/axios"
 import { useAuth } from "../context/AuthContext"
 
 // Configuration object
@@ -14,6 +15,12 @@ const CONFIG = {
     historyDescription: "Read-only view of completed tasks with submission history",
   },
 }
+
+const DOER2_OPTIONS = [
+  "Sarad Behera",
+  "Tikeshware Chakradhari(KH)",
+  "Makhan Lal",
+]
 
 function AccountDataPage() {
   const { user, isHydrating } = useAuth()
@@ -27,7 +34,7 @@ function AccountDataPage() {
   const [error, setError] = useState(null)
   const [remarksData, setRemarksData] = useState({})
   const [showHistory, setShowHistory] = useState(false)
-  const [uploadedImages, setUploadedImages] = useState({})
+  const [userUploadedImages, setUserUploadedImages] = useState({})
   const [selectedMembers, setSelectedMembers] = useState([])
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -39,6 +46,7 @@ function AccountDataPage() {
   const [confirmingTask, setConfirmingTask] = useState(null)
   const [userConfirmRemarks, setUserConfirmRemarks] = useState({})
   const [submitMessage, setSubmitMessage] = useState({ type: "", text: "" })
+  const [doerName2Selections, setDoerName2Selections] = useState({})
 
   const tableContainerRef = useRef(null)
 
@@ -102,10 +110,21 @@ function AccountDataPage() {
         setConfirmingTask(null)
         return
       }
-      await confirmTask(taskId, remarkToSend)
+      const imageToSend = userUploadedImages[taskId]?.file || null
+      const doerName2ToSend = doerName2Selections[taskId] || ""
+      await confirmTask(taskId, remarkToSend, imageToSend, doerName2ToSend)
       setSuccessMessage("Task confirmed successfully!")
       setUserConfirmRemarks(prev => {
         const next = { ...prev }
+        delete next[taskId]
+        return next
+      })
+      setUserUploadedImages(prev => {
+        const next = { ...prev }
+        const existing = next[taskId]
+        if (existing?.previewUrl) {
+          URL.revokeObjectURL(existing.previewUrl)
+        }
         delete next[taskId]
         return next
       })
@@ -220,6 +239,63 @@ function AccountDataPage() {
     return allDepartments
   }, [pendingTasks, historyTasks])
 
+  const apiOrigin = (() => {
+    try {
+      return new URL(API_BASE_URL).origin
+    } catch {
+      return ""
+    }
+  })()
+  const apiBaseWithoutApi = useMemo(() => {
+    if (!API_BASE_URL) return ""
+    return API_BASE_URL.endsWith("/api") ? API_BASE_URL.slice(0, -4) : API_BASE_URL
+  }, [])
+
+  const getTaskImageUrl = useCallback((task) => {
+    const candidates = [
+      task?.image,
+      task?.uploaded_image?.url,
+      task?.uploadedImage?.url,
+      task?.uploadedImage,
+      task?.image_url,
+      task?.imageUrl,
+    ];
+
+    const rawFound = candidates.find((val) => typeof val === "string" && val.trim() && val !== "null" && val !== "undefined");
+    if (!rawFound) return "";
+
+    const raw = rawFound.trim();
+
+    const buildWithOrigin = (path) => {
+      if (apiOrigin) {
+        const normalized = path.startsWith("/") ? path : `/${path}`
+        return `${apiOrigin}${normalized}`
+      }
+      const base = (API_BASE_URL || "").replace(/\/+$/, "")
+      const normalized = path.startsWith("/") ? path : `/${path}`
+      return `${base}${normalized}`
+    }
+
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      try {
+        const url = new URL(raw)
+        const pathPart = `${url.pathname}${url.search}${url.hash}`
+        if (apiOrigin && url.origin !== apiOrigin) {
+          return `${apiOrigin}${pathPart}`
+        }
+        return raw
+      } catch {
+        return raw
+      }
+    }
+
+    if (raw.startsWith("/api") && apiBaseWithoutApi) {
+      return `${apiBaseWithoutApi}${raw}`
+    }
+
+    return buildWithOrigin(raw)
+  }, [API_BASE_URL, apiOrigin, apiBaseWithoutApi])
+
   // Selection handlers (for admin only)
   const handleSelectItem = useCallback((taskId, isChecked) => {
     setSelectedItems(prev => {
@@ -266,18 +342,30 @@ function AccountDataPage() {
     }
   }, [filteredPendingTasks])
 
-  const handleImageUpload = useCallback((taskId, e) => {
-    const file = e.target.files[0]
+  const handleUserImageUpload = useCallback((taskId, e) => {
+    const file = e.target.files?.[0]
     if (!file) return
 
     const previewUrl = URL.createObjectURL(file)
-    setUploadedImages(prev => ({
+    setUserUploadedImages(prev => ({
       ...prev,
       [taskId]: {
         file,
         previewUrl
       }
     }))
+  }, [])
+
+  const clearUserImageSelection = useCallback((taskId) => {
+    setUserUploadedImages(prev => {
+      const next = { ...prev }
+      const existing = next[taskId]
+      if (existing?.previewUrl) {
+        URL.revokeObjectURL(existing.previewUrl)
+      }
+      delete next[taskId]
+      return next
+    })
   }, [])
 
   const handleMemberSelection = useCallback((member) => {
@@ -307,15 +395,15 @@ function AccountDataPage() {
     try {
       const selectedData = selectedItemsArray.map(id => {
         const task = pendingTasks.find(t => t.task_id === id);
-        const imageData = uploadedImages[id];
+        const taskImageUrl = getTaskImageUrl(task);
 
         return {
           task_id: task.task_id,
           status: additionalData[id] || "Yes",
           remark: remarksData[id] || "",
           attachment: task.attachment, // Use the existing attachment value (including "confirmed")
-          image_file: imageData ? imageData.file : null,
-          image_url: task.image || null
+          doer_name2: doerName2Selections[id] || task.doer_name2 || "",
+          image_url: taskImageUrl || null
         };
       });
 
@@ -325,7 +413,7 @@ function AccountDataPage() {
         setSubmitMessage({ type: "error", text: `${result.failed.length} submissions failed. Check console for details.` })
         console.error('Failed submissions:', result.failed);
       } else {
-        setSuccessMessage(`Successfully submitted ${selectedItemsArray.length} tasks with images!`);
+        setSuccessMessage(`Successfully submitted ${selectedItemsArray.length} tasks!`);
         setSubmitMessage({ type: "", text: "" })
       }
 
@@ -333,7 +421,7 @@ function AccountDataPage() {
       setSelectedItems(new Set());
       setAdditionalData({});
       setRemarksData({});
-      setUploadedImages({});
+      setDoerName2Selections({});
 
     } catch (error) {
       console.error('Submission error:', error);
@@ -484,12 +572,12 @@ function AccountDataPage() {
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Task ID
                       </th>
-                      <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Department
-                      </th>
-                      <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                        Task Description
-                      </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Department
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
+                            Task Description
+                          </th>
                       <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 whitespace-nowrap">
                         Task Start Date
                       </th>
@@ -515,86 +603,82 @@ function AccountDataPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredHistoryData.length > 0 ? (
-                      filteredHistoryData.map((history, index) => (
-                        <tr key={history.task_id} className="hover:bg-gray-50">
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900 break-words text-center">
-                              {index + 1}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900 break-words">
-                              {history.task_id || "—"}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.department || "—"}</div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words" title={history.task_description}>
-                              {history.task_description || "—"}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {renderDateTimeRaw(history.task_start_date)}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">{history.frequency || "—"}</div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {history.attachment === "confirmed" ? (
-                                <span className="text-green-600 font-medium">Confirmed</span>
-                              ) : (
-                                history.attachment || "—"
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words">
-                              {renderDateTimeRaw(history.submission_date)}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-blue-50">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full break-words ${history.status === "Yes"
-                                ? "bg-green-100 text-green-800"
-                                : history.status === "No"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-gray-100 text-gray-800"
-                                }`}
-                            >
-                              {history.status || "—"}
-                            </span>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4 bg-gray-50 min-w-[120px]">
-                            <div className="text-xs sm:text-sm text-gray-900 break-words" title={history.remark}>
-                              {history.remark || "—"}
-                            </div>
-                          </td>
-                          <td className="px-2 sm:px-3 py-2 sm:py-4">
-                            {history.image ? (
-                              <a
-                                href={history.image}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 underline flex items-center break-words text-xs sm:text-sm"
+                      filteredHistoryData.map((history, index) => {
+                        const historyImageUrl = getTaskImageUrl(history)
+                        return (
+                          <tr key={history.task_id} className="hover:bg-gray-50">
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900 break-words text-center">
+                                {index + 1}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="text-xs sm:text-sm font-medium text-gray-900 break-words">
+                                {history.task_id || "—"}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words">{history.department || "—"}</div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words" title={history.task_description}>
+                                {history.task_description || "—"}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4 bg-yellow-50">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                {renderDateTimeRaw(history.task_start_date)}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words">{history.frequency || "—"}</div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                {history.attachment === "confirmed" ? (
+                                  <span className="text-green-600 font-medium">Confirmed</span>
+                                ) : (
+                                  history.attachment || "—"
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                {renderDateTimeRaw(history.submission_date)}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4 bg-blue-50">
+                              <span
+                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full break-words ${history.status === "Yes"
+                                  ? "bg-green-100 text-green-800"
+                                  : history.status === "No"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-gray-100 text-gray-800"
+                                  }`}
                               >
+                                {history.status || "—"}
+                              </span>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4 bg-gray-50 min-w-[120px]">
+                              <div className="text-xs sm:text-sm text-gray-900 break-words" title={history.remark}>
+                                {history.remark || "—"}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              {historyImageUrl ? (
                                 <img
-                                  src={history.image}
+                                  src={historyImageUrl}
                                   alt="Attachment"
-                                  className="h-6 w-6 sm:h-8 sm:w-8 object-cover rounded-md mr-2 flex-shrink-0"
+                                  crossOrigin="anonymous"
+                                  className="h-24 w-24 object-cover rounded-md mr-2 flex-shrink-0 border border-gray-200"
                                 />
-                                <span className="break-words">View</span>
-                              </a>
-                            ) : (
-                              <span className="text-gray-400 text-xs sm:text-sm">No file</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                              ) : (
+                                <span className="text-gray-400 text-xs sm:text-sm">No file</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })
                     ) : (
                       <tr>
                         <td colSpan={11} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
@@ -668,6 +752,12 @@ function AccountDataPage() {
                             Freq
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Upload Image
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Doer Name 2
+                          </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                             COnfirm By HOD
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
@@ -694,6 +784,9 @@ function AccountDataPage() {
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                             Department
                           </th>
+                          <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                            Doer Name 2
+                          </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                             Task Description
                           </th>
@@ -713,7 +806,7 @@ function AccountDataPage() {
                             Remarks
                           </th>
                           <th className="px-2 sm:px-3 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                            Upload Image
+                            Image
                           </th>
                         </>
                       )}
@@ -725,7 +818,7 @@ function AccountDataPage() {
                         const isSelected = selectedItems.has(task.task_id)
                         const sequenceNumber = index + 1
                         const userRemarkTrimmed = (userConfirmRemarks[task.task_id] || "").trim()
-
+                        const taskImageUrl = getTaskImageUrl(task)
                         return (
                           <tr key={task.task_id} className={`${isSelected ? "bg-gray-50" : ""} hover:bg-gray-50`}>
                             {isUser ? (
@@ -763,6 +856,57 @@ function AccountDataPage() {
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words">{task.frequency || "—"}</div>
+                                </td>
+                            <td className="px-2 sm:px-3 py-2 sm:py-4">
+                              <div className="flex items-center gap-2">
+                                {userUploadedImages[task.task_id]?.previewUrl || taskImageUrl ? (
+                                  <img
+                                    src={userUploadedImages[task.task_id]?.previewUrl || taskImageUrl}
+                                    alt="Task attachment"
+                                    crossOrigin="anonymous"
+                                    className="h-24 w-24 object-cover rounded-md border border-gray-200"
+                                  />
+                                ) : (
+                                  <span className="text-xs text-gray-400">No image</span>
+                                )}
+                                <label
+                                      className={`flex items-center gap-1 text-gray-700 ${task.attachment === "confirmed" ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:text-gray-900"}`}
+                                    >
+                                      <Upload className="h-4 w-4 flex-shrink-0" />
+                                      <span className="text-xs">Upload</span>
+                                      <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={(e) => handleUserImageUpload(task.task_id, e)}
+                                        disabled={task.attachment === "confirmed"}
+                                      />
+                                    </label>
+                                    {userUploadedImages[task.task_id] && task.attachment !== "confirmed" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => clearUserImageSelection(task.task_id)}
+                                        className="text-xs text-red-600 hover:text-red-800"
+                                      >
+                                        Remove
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <select
+                                    value={doerName2Selections[task.task_id] ?? task.doer_name2 ?? ""}
+                                    onChange={(e) => setDoerName2Selections(prev => ({ ...prev, [task.task_id]: e.target.value }))}
+                                    disabled={task.attachment === "confirmed"}
+                                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-100"
+                                  >
+                                    <option value="">Select...</option>
+                                    {DOER2_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words">
@@ -807,6 +951,11 @@ function AccountDataPage() {
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words">{task.department || "—"}</div>
+                                </td>
+                                <td className="px-2 sm:px-3 py-2 sm:py-4">
+                                  <div className="text-xs sm:text-sm text-gray-900 break-words">
+                                    {doerName2Selections[task.task_id] || task.doer_name2 || "—"}
+                                  </div>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 min-w-[150px]">
                                   <div className="text-xs sm:text-sm text-gray-900 break-words" title={task.task_description}>
@@ -857,52 +1006,17 @@ function AccountDataPage() {
                                   </div>
                                 </td>
                                 <td className="px-2 sm:px-3 py-2 sm:py-4 bg-green-50">
-                                  {uploadedImages[task.task_id] || task.image ? (
-                                    <div className="flex items-center">
+                                  {taskImageUrl ? (
+                                    <div className="flex items-center gap-2">
                                       <img
-                                        src={uploadedImages[task.task_id]?.previewUrl || task.image}
-                                        alt="Receipt"
-                                        className="h-8 w-8 sm:h-10 sm:w-10 object-cover rounded-md mr-2 flex-shrink-0"
+                                        src={taskImageUrl}
+                                        alt="Attachment"
+                                        crossOrigin="anonymous"
+                                        className="h-24 w-24 object-cover rounded-md border border-gray-200"
                                       />
-                                      <div className="flex flex-col min-w-0">
-                                        <span className="text-xs text-gray-500 break-words">
-                                          {uploadedImages[task.task_id]?.file.name || "Uploaded"}
-                                        </span>
-                                        {uploadedImages[task.task_id] ? (
-                                          <span className="text-xs text-green-600">Ready</span>
-                                        ) : (
-                                          <button
-                                            className="text-xs text-gray-600 hover:text-gray-800 break-words"
-                                            onClick={() => window.open(task.image, "_blank")}
-                                          >
-                                            View
-                                          </button>
-                                        )}
-                                      </div>
                                     </div>
                                   ) : (
-                                    <label
-                                      className={`flex items-center cursor-pointer ${task.attachment?.toUpperCase() === "YES" &&
-                                        additionalData[task.task_id] !== "No"
-                                        ? "text-red-600 font-medium"
-                                        : "text-gray-600"
-                                        } hover:text-gray-800`}
-                                    >
-                                      <Upload className="h-4 w-4 mr-1 flex-shrink-0" />
-                                      <span className="text-xs break-words">
-                                        {task.attachment?.toUpperCase() === "YES" &&
-                                          additionalData[task.task_id] !== "No"
-                                          ? "Required*"
-                                          : "Upload"}
-                                      </span>
-                                      <input
-                                        type="file"
-                                        className="hidden"
-                                        accept="image/*"
-                                        onChange={(e) => handleImageUpload(task.task_id, e)}
-                                        disabled={!isSelected}
-                                      />
-                                    </label>
+                                    <span className="text-xs text-gray-400">No image</span>
                                   )}
                                 </td>
                               </>
@@ -912,7 +1026,7 @@ function AccountDataPage() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={isUser ? 7 : 12} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
+                        <td colSpan={isUser ? 9 : 12} className="px-4 sm:px-6 py-4 text-center text-gray-500 text-xs sm:text-sm">
                           {searchTerm || selectedMembers.length > 0
                             ? "No tasks matching your search"
                             : "No pending tasks found"}
